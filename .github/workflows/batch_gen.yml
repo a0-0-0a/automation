@@ -19,7 +19,7 @@ jobs:
       - name: Checkout all image repos
         run: |
           for i in $(seq 1 10); do
-            git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img${i}.git imgs/img${i}
+            git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img-${i}.git imgs/img${i}
           done
 
       - name: Setup Python
