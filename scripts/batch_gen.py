@@ -11,10 +11,10 @@ PIXAZO_KEY      = os.environ.get("PIXAZO_KEY", "")
 BASE_DIR        = "imgs"
 IMAGES_PER_REPO = 1000
 TOTAL_REPOS     = 10
-TOTAL_TARGET    = IMAGES_PER_REPO * TOTAL_REPOS  # 10,000
+TOTAL_TARGET    = IMAGES_PER_REPO * TOTAL_REPOS
 SLEEP_BETWEEN   = 5
 SLEEP_ON_FAIL   = (30, 60)
-PUSH_EVERY      = 50
+PUSH_EVERY      = 10
 
 FORCED_PREFIX = (
     "Pure nature landscape only, zero humans, zero people, zero faces, "
@@ -407,7 +407,7 @@ GROUPS = {
 }
 
 # ════════════════════════════════════════════════════════════
-# حساب الصور الموجودة
+# دوال مساعدة
 # ════════════════════════════════════════════════════════════
 def count_images_in_repo(repo_index):
     repo_dir = os.path.join(BASE_DIR, f"img{repo_index}")
@@ -445,9 +445,6 @@ def all_repos_full():
             return False
     return True
 
-# ════════════════════════════════════════════════════════════
-# Push للـ repos
-# ════════════════════════════════════════════════════════════
 def push_all_repos():
     print("\n   🔄 جاري الـ push...")
     for i in range(1, TOTAL_REPOS + 1):
@@ -460,10 +457,20 @@ def push_all_repos():
             capture_output=True, text=True
         )
         if result.stdout.strip():
+            subprocess.run(["git", "config", "user.email", "action@github.com"], cwd=repo_dir)
+            subprocess.run(["git", "config", "user.name", "GitHub Action"], cwd=repo_dir)
             subprocess.run(["git", "add", "."], cwd=repo_dir)
             subprocess.run(["git", "commit", "-m", "add images batch"], cwd=repo_dir)
-            subprocess.run(["git", "push"], cwd=repo_dir)
-            print(f"   ✅ pushed img{i}")
+            subprocess.run(["git", "checkout", "-B", "main"], cwd=repo_dir)
+            push_result = subprocess.run(
+                ["git", "push", "-u", "origin", "main"],
+                cwd=repo_dir,
+                capture_output=True, text=True
+            )
+            if push_result.returncode == 0:
+                print(f"   ✅ pushed img{i}")
+            else:
+                print(f"   ⚠️ push failed img{i}: {push_result.stderr[:100]}")
 
 # ════════════════════════════════════════════════════════════
 # توليد البروميت
@@ -526,7 +533,6 @@ def generate_image(prompt, output_path):
 # ════════════════════════════════════════════════════════════
 if __name__ == "__main__":
 
-    # تحقق إذا كل الـ repos ممتلئة
     if all_repos_full():
         print("✅ كل الـ repos ممتلئة! (10,000 صورة)")
         exit(0)
@@ -551,7 +557,6 @@ if __name__ == "__main__":
 
     while num <= TOTAL_TARGET:
 
-        # تحقق إذا كل الـ repos ممتلئة
         if all_repos_full():
             print("\n✅ كل الـ repos ممتلئة! 10,000 صورة اكتملت!")
             push_all_repos()
@@ -559,7 +564,6 @@ if __name__ == "__main__":
 
         repo_dir, repo_index = get_repo_dir(num)
 
-        # تحقق إذا هذا الـ repo ممتلئ
         if count_images_in_repo(repo_index) >= IMAGES_PER_REPO:
             num = (repo_index * IMAGES_PER_REPO) + 1
             continue
@@ -587,11 +591,9 @@ if __name__ == "__main__":
             print(f"   انتظار {wait} ثانية...")
             time.sleep(wait)
 
-        # push كل PUSH_EVERY صورة
         if success > 0 and success % PUSH_EVERY == 0:
             push_all_repos()
 
-    # push نهائي
     push_all_repos()
 
     print("\n" + "=" * 60)
