@@ -33,6 +33,7 @@ jobs:
       - name: Run batch generator
         env:
           PIXAZO_KEY: ${{ secrets.PIXAZO_KEY }}
+          PYTHONUNBUFFERED: "1"
         run: python scripts/batch_gen.py
 
       - name: Push images to repos
