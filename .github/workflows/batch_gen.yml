@@ -1,0 +1,50 @@
+name: Batch Image Generator
+
+on:
+  schedule:
+    - cron: '0 */5 * * *'
+  workflow_dispatch:
+
+jobs:
+  generate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 280
+
+    steps:
+      - name: Checkout automation repo
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GH_TOKEN }}
+
+      - name: Checkout all image repos
+        run: |
+          for i in $(seq 1 10); do
+            git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img${i}.git imgs/img${i}
+          done
+
+      - name: Setup Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install requests
+
+      - name: Run batch generator
+        env:
+          PIXAZO_KEY: ${{ secrets.PIXAZO_KEY }}
+        run: python scripts/batch_gen.py
+
+      - name: Push images to repos
+        run: |
+          git config --global user.email "action@github.com"
+          git config --global user.name "GitHub Action"
+          for i in $(seq 1 10); do
+            cd imgs/img${i}
+            if [ -n "$(git status --porcelain)" ]; then
+              git add .
+              git commit -m "add images batch"
+              git push
+            fi
+            cd ../..
+          done
