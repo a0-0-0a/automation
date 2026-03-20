@@ -2,16 +2,19 @@ import os
 import random
 import time
 import requests
+import subprocess
 
 # ════════════════════════════════════════════════════════════
 # إعدادات
 # ════════════════════════════════════════════════════════════
-PIXAZO_KEY    = os.environ.get("PIXAZO_KEY", "")
-BASE_DIR      = "imgs"
-IMAGES_PER_REPO = 1000  # كل repo تحتوي 1000 صورة
-TOTAL_TARGET  = 10000
-SLEEP_BETWEEN = 5
-SLEEP_ON_FAIL = (30, 60)
+PIXAZO_KEY      = os.environ.get("PIXAZO_KEY", "")
+BASE_DIR        = "imgs"
+IMAGES_PER_REPO = 1000
+TOTAL_REPOS     = 10
+TOTAL_TARGET    = IMAGES_PER_REPO * TOTAL_REPOS  # 10,000
+SLEEP_BETWEEN   = 5
+SLEEP_ON_FAIL   = (30, 60)
+PUSH_EVERY      = 50
 
 FORCED_PREFIX = (
     "Pure nature landscape only, zero humans, zero people, zero faces, "
@@ -404,11 +407,20 @@ GROUPS = {
 }
 
 # ════════════════════════════════════════════════════════════
-# حساب الرقم التالي من كل الـ repos
+# حساب الصور الموجودة
 # ════════════════════════════════════════════════════════════
+def count_images_in_repo(repo_index):
+    repo_dir = os.path.join(BASE_DIR, f"img{repo_index}")
+    if not os.path.exists(repo_dir):
+        return 0
+    return len([
+        f for f in os.listdir(repo_dir)
+        if f.endswith(".png") and f[:-4].isdigit()
+    ])
+
 def get_next_number():
     all_existing = []
-    for i in range(1, 11):
+    for i in range(1, TOTAL_REPOS + 1):
         repo_dir = os.path.join(BASE_DIR, f"img{i}")
         if os.path.exists(repo_dir):
             existing = [
@@ -420,15 +432,38 @@ def get_next_number():
         return 1
     return max(all_existing) + 1
 
-# ════════════════════════════════════════════════════════════
-# تحديد الـ repo حسب الرقم
-# ════════════════════════════════════════════════════════════
 def get_repo_dir(num):
     repo_index = ((num - 1) // IMAGES_PER_REPO) + 1
-    repo_index = min(repo_index, 10)
-    repo_dir = os.path.join(BASE_DIR, f"img{repo_index}")
+    repo_index = min(repo_index, TOTAL_REPOS)
+    repo_dir   = os.path.join(BASE_DIR, f"img{repo_index}")
     os.makedirs(repo_dir, exist_ok=True)
-    return repo_dir
+    return repo_dir, repo_index
+
+def all_repos_full():
+    for i in range(1, TOTAL_REPOS + 1):
+        if count_images_in_repo(i) < IMAGES_PER_REPO:
+            return False
+    return True
+
+# ════════════════════════════════════════════════════════════
+# Push للـ repos
+# ════════════════════════════════════════════════════════════
+def push_all_repos():
+    print("\n   🔄 جاري الـ push...")
+    for i in range(1, TOTAL_REPOS + 1):
+        repo_dir = os.path.join(BASE_DIR, f"img{i}")
+        if not os.path.exists(repo_dir):
+            continue
+        result = subprocess.run(
+            ["git", "status", "--porcelain"],
+            cwd=repo_dir,
+            capture_output=True, text=True
+        )
+        if result.stdout.strip():
+            subprocess.run(["git", "add", "."], cwd=repo_dir)
+            subprocess.run(["git", "commit", "-m", "add images batch"], cwd=repo_dir)
+            subprocess.run(["git", "push"], cwd=repo_dir)
+            print(f"   ✅ pushed img{i}")
 
 # ════════════════════════════════════════════════════════════
 # توليد البروميت
@@ -436,7 +471,6 @@ def get_repo_dir(num):
 def generate_prompt():
     group_name = random.choice(list(GROUPS.keys()))
     group      = GROUPS[group_name]
-
     location   = random.choice(group["locations"])
     time_day   = random.choice(group["times"])
     season     = random.choice(group["seasons"])
@@ -456,7 +490,6 @@ def generate_prompt():
         f"National Geographic cover shot, no humans, no animals, "
         f"no man-made objects, no repeated patterns."
     )
-
     label = f"{group_name} | {location[:25]} | {season[:15]}"
     return prompt, label
 
@@ -492,28 +525,45 @@ def generate_image(prompt, output_path):
 # الـ BATCH LOOP
 # ════════════════════════════════════════════════════════════
 if __name__ == "__main__":
+
+    # تحقق إذا كل الـ repos ممتلئة
+    if all_repos_full():
+        print("✅ كل الـ repos ممتلئة! (10,000 صورة)")
+        exit(0)
+
     start_from = get_next_number()
-    remaining  = TOTAL_TARGET - start_from + 1
 
     print("=" * 60)
     print(f"  Batch Image Generator — GitHub Actions")
     print(f"  البداية من      : {start_from}")
     print(f"  الهدف           : {TOTAL_TARGET}")
-    print(f"  المتبقي         : {remaining}")
+    print(f"  المتبقي         : {TOTAL_TARGET - start_from + 1}")
     print(f"  البيئات         : {len(GROUPS)} groups")
-    print(f"  الـ repos       : img1 → img10")
+    print(f"  push كل         : {PUSH_EVERY} صورة")
+    for i in range(1, TOTAL_REPOS + 1):
+        count = count_images_in_repo(i)
+        print(f"  img{i:<3}          : {count}/{IMAGES_PER_REPO}")
     print("=" * 60)
-
-    if remaining <= 0:
-        print("✅ اكتمل التوليد مسبقاً!")
-        exit()
 
     success = 0
     fail    = 0
     num     = start_from
 
     while num <= TOTAL_TARGET:
-        repo_dir    = get_repo_dir(num)
+
+        # تحقق إذا كل الـ repos ممتلئة
+        if all_repos_full():
+            print("\n✅ كل الـ repos ممتلئة! 10,000 صورة اكتملت!")
+            push_all_repos()
+            break
+
+        repo_dir, repo_index = get_repo_dir(num)
+
+        # تحقق إذا هذا الـ repo ممتلئ
+        if count_images_in_repo(repo_index) >= IMAGES_PER_REPO:
+            num = (repo_index * IMAGES_PER_REPO) + 1
+            continue
+
         output_path = os.path.join(repo_dir, f"{num}.png")
 
         if os.path.exists(output_path):
@@ -534,16 +584,18 @@ if __name__ == "__main__":
             fail += 1
             wait = random.randint(SLEEP_ON_FAIL[0], SLEEP_ON_FAIL[1])
             print(f"   [{num}/{TOTAL_TARGET}] ⚠️ فشل: {e}")
-            print(f"   انتظار {wait} ثانية ثم إعادة المحاولة...")
+            print(f"   انتظار {wait} ثانية...")
             time.sleep(wait)
 
-        if success > 0 and success % 50 == 0:
-            print(f"\n{'='*60}")
-            print(f"   تقرير: {success} ✅  |  {fail} ❌  |  المتبقي: {TOTAL_TARGET - num + 1}")
-            print(f"{'='*60}\n")
+        # push كل PUSH_EVERY صورة
+        if success > 0 and success % PUSH_EVERY == 0:
+            push_all_repos()
+
+    # push نهائي
+    push_all_repos()
 
     print("\n" + "=" * 60)
-    print(f"✅ اكتمل الـ run!")
+    print(f"✅ انتهى الـ run!")
     print(f"   نجح  : {success}")
     print(f"   فشل  : {fail}")
     print("=" * 60)
