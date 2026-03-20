@@ -40,7 +40,7 @@ jobs:
           git config --global user.email "action@github.com"
           git config --global user.name "GitHub Action"
           for i in $(seq 1 10); do
-            cd imgs/img-${i}
+            cd imgs/img${i}
             if [ -n "$(git status --porcelain)" ]; then
               git add .
               git commit -m "add images batch"
