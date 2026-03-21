@@ -1,9 +1,9 @@
-name: Batch Image Generator
+name: Stock Image Generator
 
 on:
   schedule:
-    - cron: '0 */5 * * *'
-  workflow_dispatch:
+    - cron: '0 */5 * * *'  # كل 5 ساعات
+  workflow_dispatch:        # تشغيل يدوي
 
 jobs:
   generate:
@@ -13,39 +13,46 @@ jobs:
     steps:
       - name: Checkout automation repo
         uses: actions/checkout@v4
-        with:
-          token: ${{ secrets.GH_TOKEN }}
-
-      - name: Checkout all image repos
-        run: |
-          for i in $(seq 1 10); do
-            git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img-${i}.git imgs/img${i}
-          done
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v4
         with:
           python-version: '3.11'
 
       - name: Install dependencies
         run: pip install requests
 
-      - name: Run batch generator
-        env:
-          PIXAZO_KEY: ${{ secrets.PIXAZO_KEY }}
-          PYTHONUNBUFFERED: "1"
-        run: python scripts/batch_gen.py
-
-      - name: Push images to repos
+      - name: Clone all image repos
         run: |
-          git config --global user.email "action@github.com"
-          git config --global user.name "GitHub Action"
-          for i in $(seq 1 10); do
-            cd imgs/img${i}
-            if [ -n "$(git status --porcelain)" ]; then
-              git add .
-              git commit -m "add images batch"
-              git push
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img-$i.git imgs/img$i
+            echo "✅ Cloned img-$i"
+          done
+
+      - name: Run stock pipeline
+        env:
+          PIXAZO_KEY:    ${{ secrets.PIXAZO_KEY }}
+          GH_TOKEN:      ${{ secrets.GH_TOKEN }}
+          GH_USERNAME:   a0-0-0a
+        run: |
+          cd scripts
+          python3 stock_pipeline.py
+
+      - name: Push all image repos
+        run: |
+          for i in 1 2 3 4 5 6 7 8 9 10; do
+            cd imgs/img$i
+            git config user.email "action@github.com"
+            git config user.name "GitHub Action"
+            git add -A
+            COUNT=$(git status --porcelain | wc -l)
+            if [ "$COUNT" -gt "0" ]; then
+              git commit -m "add $COUNT images"
+              git checkout -B main
+              git push -u origin main
+              echo "✅ Pushed img-$i"
+            else
+              echo "⏭ Nothing to push in img-$i"
             fi
             cd ../..
           done
