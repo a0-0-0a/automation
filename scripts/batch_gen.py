@@ -2,602 +2,622 @@ import os
 import random
 import time
 import requests
-import subprocess
+import glob
+import importlib
+import sys
+import re
+from urllib.parse import quote
 
 # ════════════════════════════════════════════════════════════
 # إعدادات
 # ════════════════════════════════════════════════════════════
-PIXAZO_KEY      = os.environ.get("PIXAZO_KEY", "")
-BASE_DIR        = "imgs"
+PIXAZO_KEY    = os.environ.get("PIXAZO_KEY", "")
+GH_TOKEN      = os.environ.get("GH_TOKEN", "")
+GH_USERNAME   = os.environ.get("GH_USERNAME", "a0-0-0a")
+
+SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
+IMGS_DIR      = os.path.join(SCRIPT_DIR, "..", "imgs")
 IMAGES_PER_REPO = 1000
 TOTAL_REPOS     = 10
-TOTAL_TARGET    = IMAGES_PER_REPO * TOTAL_REPOS
-SLEEP_BETWEEN   = 5
-SLEEP_ON_FAIL   = (30, 60)
 PUSH_EVERY      = 10
+IMAGES_PER_RUN  = 200  # عدد الصور في كل run
+SLEEP_BETWEEN   = 5
+SLEEP_ON_FAIL   = (20, 40)
 
 FORCED_PREFIX = (
-    "Pure nature landscape only, zero humans, zero people, zero faces, "
-    "zero animals, zero insects, zero birds, zero living creatures, "
-    "zero man-made objects, zero buildings, zero roads, zero vehicles. "
-    "Vast empty untouched wilderness only. "
+    "Pure nature landscape photography only. "
+    "Zero humans, zero people, zero faces, zero bodies. "
+    "Zero animals, zero birds, zero insects, zero wildlife. "
+    "Zero man-made objects, zero buildings, zero roads, zero vehicles, "
+    "zero boats, zero planes, zero wires, zero signs, zero fences. "
+    "Only untouched pure natural wilderness. "
 )
 
-DAYTIME_HEAVY = [
-    "bright clear midmorning, direct warm sun, sharp crisp shadows",
-    "brilliant sunny midday, intense overhead sun, vivid saturated colors",
-    "clear bright morning, fresh warm light, defined shadows everywhere",
-    "sunny late morning, warm directional light, rich color saturation",
-    "perfect clear afternoon, bright warm sun, sharp long shadows",
-    "bright clear midday, cloudless sky, maximum color and clarity",
-    "warm clear morning light, sun well above horizon, vivid tones",
-    "brilliant clear afternoon, direct sunlight, crisp sharp shadows",
-    "clear sunny midmorning, vivid colors, bright natural light",
-    "perfect blue sky midday, intense sun, deep shadow contrast",
-    "clear bright late morning, warm sun, rich vivid colors",
-    "sunny clear afternoon, strong directional light, sharp shadows",
-]
+FORCED_SUFFIX = (
+    " Photorealistic RAW photography. Real existing location on Earth. "
+    "Natural realistic colors only — no oversaturated, no neon, no fantasy. "
+    "Natural sky only — blue daytime, warm golden hour only. "
+    "Bright clear visibility throughout. "
+    "8k ultra detailed. National Geographic quality. "
+    "No humans. No animals. No man-made objects. "
+    "No repeated patterns. Natural irregular organic shapes."
+)
 
-GOLDEN_TIMES = [
-    "golden hour 45 minutes before sunset, long warm orange shadows",
-    "magic hour sunrise, pink gold sky, warm front light",
-    "late afternoon golden light, warm side illumination, long shadows",
-    "early morning golden light, warm raking light, vivid colors",
-]
-
-ALL_TIMES = DAYTIME_HEAVY + GOLDEN_TIMES
-
-GROUPS = {
-
-    "hot_desert": {
-        "locations": [
-            "Saharan desert Algeria, massive asymmetric orange sand dunes",
-            "Rub al Khali Saudi Arabia, endless red star dunes",
-            "Atacama desert Chile, pale cracked salt formations and strange rocks",
-            "Wadi Rum Jordan, massive red sandstone canyon formations",
-            "Namib desert Namibia, tall ancient red dunes",
-            "Sahara desert Morocco, golden sand sea stretching to horizon",
-            "Arabian desert Oman, pristine untouched golden dunes",
-            "Sonoran desert Arizona, rocky terrain with massive boulders",
-            "Dasht-e Kavir Iran, vast white salt flat desert",
-            "Sahara desert Libya, perfect undisturbed sand dune field",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "peak summer, extreme heat, bleached pale blue sky",
-            "winter desert, cool clear crisp air, vivid warm colors",
-            "after rare desert rain, dark wet sand, dramatic contrast",
-            "desert bloom, rare scattered wildflowers between rocks",
-            "spring, perfect clear light, rich warm tones",
-            "dry season, maximum color saturation, crystal clear air",
-        ],
-        "foregrounds": [
-            "rippled sand surface, wind patterns, varying depth and spacing",
-            "rough sandstone rock fragments, sharp edges, varied warm colors",
-            "dried salt crust on flat ground, crystalline white surface",
-            "coarse desert gravel, small smooth pebbles, red-orange tones",
-            "wind-sculpted sand ripples close-up, precise natural patterns",
-            "large flat sandstone slabs, warm tones, sharp shadows",
-            "smooth desert pebbles of varied size and warm color",
-            "fine orange sand with small dark pebbles scattered",
-        ],
-        "moods": [
-            "vast solitude, timeless heat, ancient geological silence",
-            "dramatic epic scale, raw power of desert landscape",
-            "peaceful golden warmth, serene emptiness",
-            "stark minimalist beauty, pure elemental forms",
-            "rich warm tones, saturated golden desert atmosphere",
-        ],
-    },
-
-    "arctic_tundra": {
-        "locations": [
-            "Arctic tundra Svalbard, frozen ground with low vegetation",
-            "Greenland ice sheet, endless white surface to horizon",
-            "Icelandic highland interior, snow-covered volcanic plateau",
-            "Canadian arctic tundra, snow-covered ground and frozen lake",
-            "Norwegian arctic coastline, frozen ground and pale blue sky",
-            "Alaska North Slope, flat frozen tundra, low horizon",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "deep polar winter, complete snow cover, pale cold blue sky",
-            "brief arctic summer, low clear sun, tundra grasses visible",
-            "arctic spring, patches of dark earth through melting snow",
-            "clear cold autumn, first frost on tundra ground",
-            "bright winter day, brilliant white snow, clear blue sky",
-        ],
-        "foregrounds": [
-            "fresh powder snow surface with subtle blue shadow variations",
-            "windblown snow surface with fine rippled patterns",
-            "frost-covered low vegetation stubble on frozen tundra ground",
-            "dark rock partially exposed through surrounding snow",
-            "flat snow surface with natural light and shadow texture",
-            "snow crystals on frozen ground surface, fine detail",
-        ],
-        "moods": [
-            "extreme cold silence, pristine frozen world",
-            "austere stark beauty, white and blue minimal palette",
-            "crisp perfect clarity, clean frozen air",
-            "brilliant white landscape, pure light and shadow",
-            "vast open frozen space, endless horizon",
-        ],
-    },
-
-    "tropical_rainforest": {
-        "locations": [
-            "Amazon rainforest canopy Brazil, dense uneven treetops from above",
-            "Borneo rainforest Sabah, ancient towering emergent trees",
-            "Congo basin forest, dense humid forest interior",
-            "Daintree rainforest Australia, ancient tropical forest floor",
-            "Sumatra lowland rainforest, massive ancient dipterocarp trees",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "peak wet season, dripping surfaces, deep saturated greens",
-            "dry season, clear light, rich vivid green tones",
-            "after heavy tropical rain, vivid glistening surfaces",
-            "peak growth season, lush dense vegetation, vivid colors",
-        ],
-        "foregrounds": [
-            "massive exposed tree trunks on dark humid forest floor",
-            "dense carpet of ferns on irregular rocky ground",
-            "large tropical leaves of varied shape and size overlapping",
-            "dark rich forest soil with small plants and leaf litter",
-            "shallow clear forest stream flowing over mossy rocks",
-            "vivid green moss covering large boulders on forest floor",
-        ],
-        "moods": [
-            "ancient primordial, untouched for millions of years",
-            "dense humid abundance, overwhelming green complexity",
-            "alive with growth, constant natural richness",
-            "cool shaded interior, golden light filtering through canopy",
-            "sacred old growth, ancient beyond measure",
-        ],
-    },
-
-    "temperate_forest": {
-        "locations": [
-            "Muir Woods redwood forest California, towering trunks dark floor",
-            "Yakushima cedar forest Japan, ancient mossy trees",
-            "Olympic rainforest Washington, moss-draped temperate forest",
-            "Białowieża primeval forest Poland, ancient mixed forest",
-            "Appalachian forest eastern USA, dense deciduous forest",
-            "Black Forest Germany, dense dark spruce forest",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "peak autumn, saturated orange gold red leaves, fallen leaf carpet",
-            "deep winter, snow on branches, sharp shadows on snow",
-            "early spring, pale fresh green buds on dark branches",
-            "peak summer, full dense green canopy, filtered light",
-            "spring wildflowers carpet on bright forest floor",
-            "late summer, rich deep green canopy, warm golden tones",
-        ],
-        "foregrounds": [
-            "fallen autumn leaves in various colors and stages of decay",
-            "dense moss covering irregular rocks and ground",
-            "forest floor ferns of varied height and density",
-            "scattered pinecones and needles on dark rich soil",
-            "bright wildflowers scattered on forest floor",
-            "autumn leaf carpet, varied colors, natural disorder",
-        ],
-        "moods": [
-            "peaceful quiet forest, warm natural light",
-            "ancient old growth, centuries of undisturbed growth",
-            "seasonal richness, vivid autumn or spring colors",
-            "sheltered warmth, forest filled with golden light",
-            "rich layered forest, complex natural beauty",
-        ],
-    },
-
-    "alpine_mountain": {
-        "locations": [
-            "Swiss Alps Lauterbrunnen, vertical cliffs with hanging waterfalls",
-            "Dolomites South Tyrol, pale vertical limestone towers",
-            "Patagonia Torres del Paine, jagged granite peaks",
-            "Rockies Banff, vivid turquoise lake surrounded by forested peaks",
-            "New Zealand Southern Alps, snow peaks above green valleys",
-            "Alps Austria, steep green slopes with rocky peaks above",
-            "Himalayas Nepal, massive snow peaks rising above clouds",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "peak summer, green lower slopes, snow on high peaks",
-            "deep winter, everything snow-covered, brilliant white peaks",
-            "peak autumn, golden forest in valley, snow on high peaks",
-            "spring, fresh green emerging, snow still on high peaks",
-            "clear summer, deep blue sky, vivid green and white",
-        ],
-        "foregrounds": [
-            "rough alpine rock surface with varied lichen coverage",
-            "alpine wildflowers scattered between rocks, vivid colors",
-            "coarse mountain gravel and broken rock fragments",
-            "high altitude sparse grass between rocky outcrops",
-            "close wildflower bloom on rocky alpine ground",
-            "snow-dusted rocky ground with exposed stones",
-        ],
-        "moods": [
-            "epic scale, mountains dwarfing everything below",
-            "crisp thin mountain air, perfect crystal clarity",
-            "peaceful solitude, remote high altitude beauty",
-            "brilliant clear mountain day, vivid saturated colors",
-            "dramatic power, raw geological force",
-        ],
-    },
-
-    "ocean_coast": {
-        "locations": [
-            "Faroe Islands sea cliffs, sheer green cliffs above Atlantic",
-            "Big Sur California, dramatic rocky coastline Pacific",
-            "Lofoten islands Norway, jagged peaks rising from dark sea",
-            "Calanques coast France, white limestone cliffs above turquoise water",
-            "Iceland black sand beach Reynisfjara, basalt columns and waves",
-            "Wild Atlantic Way Ireland, jagged rocky Atlantic coastline",
-            "Azores ocean cliffs, volcanic black rock above Atlantic",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "summer calm, deep vivid blue sea, clear sky",
-            "spring, clear fresh light, vivid colors",
-            "autumn, dramatic sky, clear visibility, vivid sea",
-            "winter clear day, cold crisp light, deep blue water",
-        ],
-        "foregrounds": [
-            "rough wet barnacle-covered rock with tide pools",
-            "coarse black volcanic sand with wave-smoothed stones",
-            "jagged sea cliff edge covered in lichen",
-            "smooth boulders with kelp and seaweed",
-            "wet sand with foam patterns at wave retreat",
-            "coastal rock close-up with barnacles and natural texture",
-        ],
-        "moods": [
-            "raw ocean power, constant dramatic movement",
-            "serene clear sea, peaceful bright reflection",
-            "vivid blue open ocean, brilliant coastal clarity",
-            "fresh sea air, crisp bright coastal light",
-            "dramatic coastal geology, ancient rock and sea",
-        ],
-    },
-
-    "canyon_rock_formation": {
-        "locations": [
-            "Grand Canyon inner gorge Arizona, layered red and brown walls",
-            "Antelope Canyon Arizona, smooth curved orange sandstone walls",
-            "Bryce Canyon Utah, dense orange hoodoo rock spires",
-            "Canyonlands Utah, vast layered red rock plateau and canyons",
-            "Cappadocia valley Turkey, eroded soft volcanic rock formations",
-            "Wave formation Arizona, smooth curved layered sandstone",
-            "Quebrada Humahuaca Argentina, vivid layered colored cliffs",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "summer, dry clear air, vivid saturated rock colors",
-            "winter, light dusting of snow on red rock ledges, clear sky",
-            "spring, crystal clear light, maximum color saturation",
-            "autumn, perfect clear light, warm rich deep tones",
-        ],
-        "foregrounds": [
-            "layered sandstone surface with varied texture and color bands",
-            "rough broken rock fragments at canyon base",
-            "fine red sand on canyon floor with ripple patterns",
-            "cross-bedded sandstone detail showing diagonal layering",
-            "smooth curved sandstone wall with warm color gradient",
-            "large flat rock slabs, warm orange tones, sharp shadows",
-        ],
-        "moods": [
-            "geological time made visible, ancient layered rock",
-            "warm saturated color, rich deep rock tones",
-            "dramatic light and shadow, sharp contrast beauty",
-            "vivid warm palette, rich orange and red tones",
-            "ancient erosion, water carved over millennia",
-        ],
-    },
-
-    "river_lake_wetland": {
-        "locations": [
-            "Plitvice lakes Croatia, cascading turquoise terraced pools",
-            "Lake Baikal Russia, clear deep blue lake surface",
-            "Norwegian fjord Geiranger, dark water and vertical cliffs",
-            "New Zealand fiordland, mirror-still dark fjord water",
-            "Patagonia glacial lake, vivid turquoise milky water",
-            "Iceland glacial river, braided channels across flat plain",
-            "Banff Lake Louise, vivid turquoise glacial lake",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "summer, clear vivid water, maximum color",
-            "autumn, golden reflections in perfectly still water",
-            "spring, fresh clear light, clean high water",
-            "winter clear day, thin ice forming at edges, crisp light",
-        ],
-        "foregrounds": [
-            "smooth water-worn stones on shoreline, varied sizes",
-            "river gravel bar, fine to coarse sorted stones",
-            "clear shallow water over detailed rocky bottom",
-            "wet rocks at waterline, varied texture and color",
-            "shallow clear pool with rocks visible through water",
-            "pebbles and stones at water edge, wet and dry contrast",
-        ],
-        "moods": [
-            "perfectly still, glassy reflection, profound calm",
-            "vivid turquoise color, rich and clear water",
-            "cool fresh water atmosphere, clean perfect clarity",
-            "peaceful lakeside calm, clear natural reflections",
-            "flowing movement, bright water in motion",
-        ],
-    },
-
-    "grassland_savanna": {
-        "locations": [
-            "Mongolian steppe Gobi, endless rolling golden grassland",
-            "Patagonian steppe Argentina, windswept golden grass plains",
-            "Kansas tallgrass prairie USA, rolling sea of grass",
-            "New Zealand tussock grassland, golden tussock slopes",
-            "Tibetan plateau Qinghai, high altitude grass plateau",
-            "Kazakh steppe, flat endless grass stretching to horizon",
-            "South African highveld, open golden grass plateau",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "peak summer, tall golden dry grass, bright clear sky",
-            "spring, fresh short vivid green grass",
-            "autumn, tawny brown dried grass, clear cold light",
-            "early summer, mixed green and gold, rich warm tones",
-            "late summer, deep golden grass, vivid warm light",
-        ],
-        "foregrounds": [
-            "close grass stems of varied height in gentle wind",
-            "dried grass seed heads close-up, fine natural detail",
-            "mixed grass species of varied heights and textures",
-            "windswept flattened grass showing wind direction",
-            "grass close-up, warm backlit golden tones",
-            "tussock grass clumps, varied rounded organic shapes",
-        ],
-        "moods": [
-            "vast open endless, sky and grass only",
-            "golden warmth, peaceful open plain",
-            "windswept solitude, constant grass movement",
-            "rich golden light, warm grassland atmosphere",
-            "elemental simplicity, pure horizontal golden space",
-        ],
-    },
-
-    "macro_closeup_nature": {
-        "locations": [
-            "single wildflower bloom, soft blurred natural background",
-            "fern frond close-up, soft green background",
-            "single flower petal close-up, shallow depth of field",
-            "moss close-up, tiny intricate green structures",
-            "lichen on rock surface close-up, abstract texture",
-            "grass seed head close-up, soft bokeh background",
-            "single autumn leaf close-up, blurred forest floor",
-            "tree bark texture close-up, detailed wood grain",
-            "stone surface close-up, mineral patterns and texture",
-            "pine cone scale detail, natural geometric pattern",
-            "flower stamen close-up, abstract natural beauty",
-            "pebble collection close-up, varied colors and textures",
-            "dewdrop on leaf surface, macro detail",
-            "seedpod close-up, intricate natural structure",
-        ],
-        "times": ALL_TIMES,
-        "seasons": [
-            "spring bloom, fresh vivid color, new growth",
-            "summer, rich saturated color, full bloom",
-            "autumn, warm gold tones, changing color",
-            "peak flower season, maximum vivid color",
-            "early spring, delicate fresh colors",
-        ],
-        "foregrounds": [
-            "subject perfectly sharp, everything else soft blur",
-            "extreme close focus, full frame natural detail",
-            "shallow depth of field, sharp center, soft edges",
-            "macro detail, tiny natural structures revealed",
-            "intimate close view, natural texture fills frame",
-        ],
-        "moods": [
-            "intimate and delicate, quiet natural beauty",
-            "vivid fresh color, nature at its most beautiful",
-            "serene natural detail, meditative close focus",
-            "soft warm light on natural subject, gentle mood",
-            "peaceful close observation, calm and still",
-        ],
-    },
-
+WEIGHTED_GROUPS = {
+    "golden_sky":          4,
+    "dramatic_clouds":     4,
+    "glacial_lakes":       3,
+    "waterfalls_rivers":   3,
+    "granite_peaks":       3,
+    "limestone_peaks":     3,
+    "saharan_dunes":       2,
+    "dramatic_sea_cliffs": 2,
+    "beach_seascape":      2,
+    "temperate_forest":    2,
+    "wildflower_meadow":   2,
 }
 
 # ════════════════════════════════════════════════════════════
-# دوال مساعدة
+# الكلمات المحظورة
 # ════════════════════════════════════════════════════════════
-def count_images_in_repo(repo_index):
-    repo_dir = os.path.join(BASE_DIR, f"img{repo_index}")
-    if not os.path.exists(repo_dir):
-        return 0
-    return len([
-        f for f in os.listdir(repo_dir)
-        if f.endswith(".png") and f[:-4].isdigit()
-    ])
+FORBIDDEN_WORDS = [
+    "human", "humans", "person", "persons", "people", "man", "men",
+    "woman", "women", "child", "children", "boy", "girl",
+    "figure", "figures", "face", "faces", "body", "bodies",
+    "hand", "hands", "foot", "feet", "silhouette", "silhouettes",
+    "footprint", "footstep", "hiker", "climber", "traveler",
+    "tourist", "photographer", "observer", "visitor",
+    "animal", "animals", "bird", "birds", "dog", "dogs",
+    "cat", "cats", "fish", "insect", "insects", "bear", "bears",
+    "wolf", "wolves", "deer", "horse", "horses", "cow", "cows",
+    "sheep", "eagle", "eagles", "hawk", "hawks", "owl", "owls",
+    "snake", "lizard", "frog", "butterfly", "butterflies",
+    "bee", "bees", "ant", "ants", "fly", "worm", "moth", "moths",
+    "whale", "dolphin", "shark", "seal", "fox", "rabbit",
+    "squirrel", "wildlife", "creature", "creatures", "beast",
+    "fauna", "flock", "herd", "nest", "web", "prey", "predator",
+    "car", "cars", "truck", "trucks", "bus", "buses",
+    "boat", "boats", "ship", "ships", "plane", "planes",
+    "jet", "helicopter", "drone",
+    "building", "buildings", "house", "houses", "tower", "towers",
+    "bridge", "bridges", "road", "roads", "path", "trail", "trails",
+    "fence", "fences", "wire", "wires", "pole", "poles",
+    "sign", "signs", "statue", "statues", "monument", "ruins",
+    "village", "villages", "city", "cities", "town", "towns",
+    "farm", "farms", "cabin", "hut", "tent", "cairn",
+    "structure", "structures", "infrastructure", "architecture",
+    "shelter", "camp", "campsite",
+    "norway", "norwegian", "swiss", "switzerland", "france", "french",
+    "italy", "italian", "germany", "german", "austria", "austrian",
+    "canada", "canadian", "usa", "american", "australia", "australian",
+    "brazil", "brazilian", "argentina", "chile", "peru", "bolivia",
+    "russia", "russian", "china", "chinese", "japan", "japanese",
+    "india", "indian", "nepal", "nepalese", "tibet", "tibetan",
+    "mongolia", "mongolian", "iceland", "icelandic", "greenland",
+    "alaska", "california", "colorado", "utah", "arizona",
+    "patagonia", "patagonian", "croatia", "croatian",
+    "jordan", "iran", "oman", "sahara", "saharan",
+    "amazon", "alps", "alpine", "dolomites", "himalaya", "himalayan",
+    "andes", "andean", "rockies", "banff", "yosemite", "plitvice",
+    "namib", "atacama", "gobi", "siberia", "siberian",
+    "lofoten", "faroe", "azores", "atlantic", "pacific",
+    "mediterranean", "caribbean", "scandinavia", "scandinavian",
+    "scotland", "scottish", "ireland", "irish", "wales",
+    "england", "english", "spain", "spanish", "portugal", "portuguese",
+    "turkey", "turkish", "greece", "greek", "morocco", "moroccan",
+    "kenya", "tanzania", "fjord", "fiord",
+]
 
-def get_next_number():
-    all_existing = []
-    for i in range(1, TOTAL_REPOS + 1):
-        repo_dir = os.path.join(BASE_DIR, f"img{i}")
+def passes_filter(text):
+    text_lower = text.lower()
+    for word in FORBIDDEN_WORDS:
+        pattern = r'\b' + re.escape(word) + r'\b'
+        if re.search(pattern, text_lower):
+            return False, word
+    return True, None
+
+# ════════════════════════════════════════════════════════════
+# تحميل seo_titles
+# ════════════════════════════════════════════════════════════
+def load_seo_module():
+    if SCRIPT_DIR not in sys.path:
+        sys.path.insert(0, SCRIPT_DIR)
+    try:
+        from seo_data.seo_titles import generate_seo_title, get_seo_data
+        print(f"   📂 SEO titles module loaded ✅")
+        return generate_seo_title, get_seo_data
+    except Exception as e:
+        print(f"   ⚠️ SEO titles module not found: {e}")
+        return None, None
+
+# ════════════════════════════════════════════════════════════
+# تحديد الـ repo والمسار التالي
+# ════════════════════════════════════════════════════════════
+def get_next_slot():
+    """يرجع (repo_num, next_img_num, output_path)"""
+    for repo_num in range(1, TOTAL_REPOS + 1):
+        repo_dir = os.path.join(IMGS_DIR, f"img{repo_num}")
+        os.makedirs(repo_dir, exist_ok=True)
+
+        existing = [
+            int(f.split(".")[0]) for f in os.listdir(repo_dir)
+            if f.endswith(".png") and f.split(".")[0].isdigit()
+        ]
+
+        count = len(existing)
+        if count < IMAGES_PER_REPO:
+            next_num = max(existing) + 1 if existing else 1
+            return repo_num, next_num, repo_dir
+
+    return None, None, None
+
+def get_total_generated():
+    total = 0
+    for repo_num in range(1, TOTAL_REPOS + 1):
+        repo_dir = os.path.join(IMGS_DIR, f"img{repo_num}")
         if os.path.exists(repo_dir):
-            existing = [
-                int(f[:-4]) for f in os.listdir(repo_dir)
-                if f.endswith(".png") and f[:-4].isdigit()
-            ]
-            all_existing.extend(existing)
-    if not all_existing:
-        return 1
-    return max(all_existing) + 1
+            total += len([f for f in os.listdir(repo_dir) if f.endswith(".png")])
+    return total
 
-def get_repo_dir(num):
-    repo_index = ((num - 1) // IMAGES_PER_REPO) + 1
-    repo_index = min(repo_index, TOTAL_REPOS)
-    repo_dir   = os.path.join(BASE_DIR, f"img{repo_index}")
-    os.makedirs(repo_dir, exist_ok=True)
-    return repo_dir, repo_index
+# ════════════════════════════════════════════════════════════
+# git push للـ repo
+# ════════════════════════════════════════════════════════════
+def push_repo(repo_num):
+    repo_dir = os.path.join(IMGS_DIR, f"img{repo_num}")
+    try:
+        import subprocess
+        cmds = [
+            ["git", "-C", repo_dir, "config", "user.email", "action@github.com"],
+            ["git", "-C", repo_dir, "config", "user.name", "GitHub Action"],
+            ["git", "-C", repo_dir, "add", "-A"],
+        ]
+        for cmd in cmds:
+            subprocess.run(cmd, check=True, capture_output=True)
 
-def all_repos_full():
-    for i in range(1, TOTAL_REPOS + 1):
-        if count_images_in_repo(i) < IMAGES_PER_REPO:
-            return False
-    return True
-
-def push_all_repos():
-    print("\n   🔄 جاري الـ push...")
-    for i in range(1, TOTAL_REPOS + 1):
-        repo_dir = os.path.join(BASE_DIR, f"img{i}")
-        if not os.path.exists(repo_dir):
-            continue
+        # تحقق إذا في تغييرات
         result = subprocess.run(
-            ["git", "status", "--porcelain"],
-            cwd=repo_dir,
+            ["git", "-C", repo_dir, "status", "--porcelain"],
             capture_output=True, text=True
         )
-        if result.stdout.strip():
-            subprocess.run(["git", "config", "user.email", "action@github.com"], cwd=repo_dir)
-            subprocess.run(["git", "config", "user.name", "GitHub Action"], cwd=repo_dir)
-            subprocess.run(["git", "add", "."], cwd=repo_dir)
-            subprocess.run(["git", "commit", "-m", "add images batch"], cwd=repo_dir)
-            subprocess.run(["git", "checkout", "-B", "main"], cwd=repo_dir)
-            push_result = subprocess.run(
-                ["git", "push", "-u", "origin", "main"],
-                cwd=repo_dir,
-                capture_output=True, text=True
-            )
-            if push_result.returncode == 0:
-                print(f"   ✅ pushed img{i}")
-            else:
-                print(f"   ⚠️ push failed img{i}: {push_result.stderr[:100]}")
+        if not result.stdout.strip():
+            return
+
+        subprocess.run(
+            ["git", "-C", repo_dir, "commit", "-m", "add images"],
+            check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "-C", repo_dir, "checkout", "-B", "main"],
+            check=True, capture_output=True
+        )
+        subprocess.run(
+            ["git", "-C", repo_dir, "push", "-u", "origin", "main"],
+            check=True, capture_output=True
+        )
+        print(f"   📤 Pushed img{repo_num} ✅")
+    except Exception as e:
+        print(f"   ⚠️ Push failed for img{repo_num}: {e}")
 
 # ════════════════════════════════════════════════════════════
-# توليد البروميت
+# تحميل الـ groups
 # ════════════════════════════════════════════════════════════
-def generate_prompt():
-    group_name = random.choice(list(GROUPS.keys()))
-    group      = GROUPS[group_name]
-    location   = random.choice(group["locations"])
-    time_day   = random.choice(group["times"])
-    season     = random.choice(group["seasons"])
-    foreground = random.choice(group["foregrounds"])
-    mood       = random.choice(group["moods"])
+def load_all_groups():
+    all_groups = {}
+    groups_dir = os.path.join(SCRIPT_DIR, "groups")
+    if SCRIPT_DIR not in sys.path:
+        sys.path.insert(0, SCRIPT_DIR)
+    for filepath in glob.glob(os.path.join(groups_dir, "group_*.py")):
+        module_name = "groups." + os.path.basename(filepath)[:-3]
+        try:
+            mod = importlib.import_module(module_name)
+            if hasattr(mod, "GROUPS"):
+                all_groups.update(mod.GROUPS)
+                print(f"   ✅ {os.path.basename(filepath)}: {len(mod.GROUPS)} groups")
+        except Exception as e:
+            print(f"   ⚠️ failed {os.path.basename(filepath)}: {e}")
+    return all_groups
 
-    prompt = (
-        f"{FORCED_PREFIX}"
-        f"{location}, {season}. "
-        f"{time_day}. "
-        f"Foreground detail: {foreground}. "
-        f"Atmosphere: {mood}. "
-        f"Natural imperfections throughout, no repeated patterns, "
-        f"no uniform elements, organic irregular shapes only. "
-        f"Shot on Hasselblad H6D, RAW format, photorealistic, "
-        f"real location on Earth, 8k ultra detailed, "
-        f"National Geographic cover shot, no humans, no animals, "
-        f"no man-made objects, no repeated patterns."
+# ════════════════════════════════════════════════════════════
+# اختيار group بالوزن
+# ════════════════════════════════════════════════════════════
+def pick_weighted_group(all_groups):
+    weighted = []
+    for name in all_groups:
+        weight = WEIGHTED_GROUPS.get(name, 1)
+        weighted.extend([name] * weight)
+    return random.choice(weighted)
+
+# ════════════════════════════════════════════════════════════
+# توليد البيانات المحلية
+# ════════════════════════════════════════════════════════════
+def generate_local_data(all_groups):
+    group_name  = pick_weighted_group(all_groups)
+    group       = all_groups[group_name]
+    location    = random.choice(group["locations"])
+    time_day    = random.choice(group["times"])
+    season      = random.choice(group["seasons"])
+    foreground  = random.choice(group["foregrounds"])
+    mood        = random.choice(group["moods"])
+    composition = random.choice(group.get("compositions", ["wide angle natural composition"]))
+
+    base_data = {
+        "group_name":  group_name,
+        "location":    location,
+        "time_day":    time_day,
+        "season":      season,
+        "foreground":  foreground,
+        "mood":        mood,
+        "composition": composition,
+    }
+    label = f"{group_name} | {location[:28]} | {season[:18]}"
+    return base_data, label
+
+# ════════════════════════════════════════════════════════════
+# البروميت المحلي
+# ════════════════════════════════════════════════════════════
+def build_local_prompt(base_data):
+    return (
+        f"{base_data['location']}, {base_data['season']}. "
+        f"{base_data['time_day']}. "
+        f"Composition: {base_data['composition']}. "
+        f"Foreground: {base_data['foreground']}. "
+        f"Mood: {base_data['mood']}."
     )
-    label = f"{group_name} | {location[:25]} | {season[:15]}"
-    return prompt, label
+
+# ════════════════════════════════════════════════════════════
+# SEO محلي
+# ════════════════════════════════════════════════════════════
+def build_local_seo(group_name, season, mood, keywords,
+                    gen_title_fn, get_data_fn):
+    title    = gen_title_fn(group_name) if gen_title_fn else f"Natural {group_name.replace('_', ' ').title()} Landscape"
+    seo_data = get_data_fn(group_name) if get_data_fn else None
+
+    if seo_data and seo_data.get("descriptions"):
+        description = random.choice(seo_data["descriptions"])
+    else:
+        description = f"Stunning {group_name.replace('_', ' ')} landscape. {mood}. Perfect for backgrounds, wallpapers, editorial, and nature projects."
+
+    category = seo_data["category"] if seo_data else "Nature"
+    core_kw  = seo_data["keywords_core"] if seo_data else []
+
+    season_words = [w.strip() for w in season.replace(",", " ").split()[:3] if len(w) > 3]
+    mood_words   = [w.strip() for w in mood.replace(",", " ").split()[:3] if len(w) > 3]
+
+    all_keywords = list(set(
+        core_kw + keywords + season_words + mood_words + [
+            "nature", "landscape", "scenic", "background", "wallpaper",
+            "outdoor", "natural", "wilderness", "stock photo",
+            "high resolution", "horizontal", group_name.replace("_", " "),
+        ]
+    ))
+
+    return {
+        "title":       title,
+        "description": description,
+        "category":    category,
+        "keywords":    ", ".join(all_keywords[:60]),
+        "orientation": "Horizontal",
+        "media_type":  "Photography",
+    }
+
+# ════════════════════════════════════════════════════════════
+# LLM7 call
+# ════════════════════════════════════════════════════════════
+def call_llm7(user_message):
+    response = requests.post(
+        "https://api.llm7.io/v1/chat/completions",
+        json={
+            "model": "meta-llama/llama-3.3-70b-instruct",
+            "messages": [{"role": "user", "content": user_message}],
+            "max_tokens": 800,
+        },
+        headers={
+            "Content-Type": "application/json",
+            "api-key": "unused"
+        },
+        timeout=60
+    )
+    response.raise_for_status()
+    return response.json()["choices"][0]["message"]["content"].strip()
+
+# ════════════════════════════════════════════════════════════
+# LLM7 يولّد prompt + SEO
+# ════════════════════════════════════════════════════════════
+def get_llm7_output(base_data, keywords):
+    env_type   = base_data["group_name"].replace("_", " ")
+    loc        = base_data["location"][:60]
+    time_day   = base_data["time_day"][:40]
+    season     = base_data["season"][:40]
+    foreground = base_data["foreground"][:40]
+    mood       = base_data["mood"][:40]
+    kw         = ", ".join(keywords[:6])
+
+    USER = (
+        f"Nature scene: {env_type}, {loc}, {time_day}, {season}, "
+        f"{foreground} foreground, {mood}.\n\n"
+        f"Output exactly this format:\n"
+        f"PROMPT: [4 vivid sentences. Describe ONLY what is visually present: "
+        f"rocks, sky, light, terrain, plants, water, clouds, sand, texture. "
+        f"Write purely what you SEE. Use only positive visual descriptions. "
+        f"Use only general visual terms, no specific place names.]\n"
+        f"TITLE: [5-8 words visual description, no specific place names]\n"
+        f"DESCRIPTION: [2 sentences about visual scene and use cases]\n"
+        f"CATEGORY: Nature\n"
+        f"KEYWORDS: [40 comma-separated visual keywords, no specific place names, include: {kw}]"
+    )
+
+    for attempt in range(3):
+        try:
+            print(f"   🤖 LLM7 generating (attempt {attempt+1}/3)...")
+            raw = call_llm7(USER)
+
+            if not raw or len(raw) < 100:
+                print(f"   ⚠️ LLM7 empty — retrying...")
+                time.sleep(3)
+                continue
+
+            result = {
+                "prompt":      "",
+                "title":       "",
+                "description": "",
+                "category":    "Nature",
+                "keywords":    "",
+            }
+
+            current_key = None
+            current_val = []
+
+            for line in raw.split("\n"):
+                clean = line.strip().replace("**", "").replace("*", "")
+                if not clean:
+                    continue
+
+                matched_key = None
+                for key in result:
+                    if clean.upper().startswith(key.upper() + ":"):
+                        matched_key = key
+                        break
+
+                if matched_key:
+                    if current_key and current_val:
+                        result[current_key] = " ".join(current_val).strip()
+                    current_key = matched_key
+                    inline = clean.split(":", 1)[1].strip()
+                    current_val = [inline] if inline else []
+                else:
+                    if current_key:
+                        current_val.append(clean)
+
+            if current_key and current_val:
+                result[current_key] = " ".join(current_val).strip()
+
+            if not result["prompt"] or not result["title"] or not result["keywords"]:
+                print(f"   ⚠️ LLM7 incomplete — retrying...")
+                time.sleep(3)
+                continue
+
+            ok, bad = passes_filter(result["prompt"])
+            if not ok:
+                print(f"   ⚠️ LLM7 prompt contains '{bad}' — using local")
+                return None
+
+            ok2, bad2 = passes_filter(result["title"])
+            if not ok2:
+                result["title"] = result["title"].replace(bad2, "").strip()
+
+            print(f"   ✅ LLM7 ready ✓")
+            return result
+
+        except Exception as e:
+            print(f"   ⚠️ LLM7 error (attempt {attempt+1}/3): {e}")
+            time.sleep(5)
+
+    print(f"   ⚠️ LLM7 failed — using local fallback")
+    return None
 
 # ════════════════════════════════════════════════════════════
 # توليد الصورة
 # ════════════════════════════════════════════════════════════
-def generate_image(prompt, output_path):
-    headers = {
-        "Content-Type": "application/json",
-        "Cache-Control": "no-cache",
-        "Ocp-Apim-Subscription-Key": PIXAZO_KEY
-    }
-    data = {
-        "prompt": prompt,
-        "num_steps": 8,
-        "height": 1344,
-        "width": 768,
-    }
-    response = requests.post(
-        "https://gateway.pixazo.ai/flux-1-schnell/v1/getData",
-        headers=headers,
-        json=data,
-        timeout=60
-    )
-    response.raise_for_status()
-    result    = response.json()
-    image_url = result["output"]
-    img_data  = requests.get(image_url, timeout=60).content
-    with open(output_path, "wb") as f:
-        f.write(img_data)
+def generate_image(final_prompt, output_path, prompt_source):
+    full_prompt = FORCED_PREFIX + final_prompt + FORCED_SUFFIX
+
+    # Primary: Pixazo
+    try:
+        print(f"   🎨 Generating with Pixazo [{prompt_source}]...")
+        headers = {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-cache",
+            "Ocp-Apim-Subscription-Key": PIXAZO_KEY
+        }
+        data = {
+            "prompt":    full_prompt,
+            "num_steps": 8,
+            "height":    1080,
+            "width":     1920,
+        }
+        response = requests.post(
+            "https://gateway.pixazo.ai/flux-1-schnell/v1/getData",
+            headers=headers,
+            json=data,
+            timeout=60
+        )
+        response.raise_for_status()
+        result    = response.json()
+        image_url = result["output"]
+        img_data  = requests.get(image_url, timeout=60).content
+        with open(output_path, "wb") as f:
+            f.write(img_data)
+        print(f"   ✅ Saved from Pixazo")
+        return "pixazo"
+
+    except Exception as e:
+        print(f"   ⚠️ Pixazo failed: {e}")
+
+    # Fallback: Pollinations
+    try:
+        short   = final_prompt[:250] + " Pure wilderness. Photorealistic, 8k."
+        encoded = quote(short)
+        url = (
+            f"https://gen.pollinations.ai/image/{encoded}"
+            f"?model=flux&width=1920&height=1080"
+            f"&seed={random.randint(1,999999)}&nologo=true"
+        )
+        response = requests.get(url, timeout=120)
+        response.raise_for_status()
+        if len(response.content) < 10000:
+            raise Exception("Image too small")
+        with open(output_path, "wb") as f:
+            f.write(response.content)
+        print(f"   ✅ Saved from Pollinations")
+        return "flux-dev"
+
+    except Exception as e:
+        raise Exception(f"All image APIs failed: {e}")
 
 # ════════════════════════════════════════════════════════════
-# الـ BATCH LOOP
+# حفظ الـ txt
+# ════════════════════════════════════════════════════════════
+def save_txt(txt_path, seo, group_name, season, mood, label,
+             source, prompt_source, seo_source):
+    content = f"""TITLE:
+{seo['title']}
+
+DESCRIPTION:
+{seo['description']}
+
+CATEGORY:
+{seo['category']}
+
+KEYWORDS:
+{seo['keywords']}
+
+ORIENTATION:
+{seo['orientation']}
+
+MEDIA TYPE:
+{seo['media_type']}
+
+--- METADATA ---
+GROUP: {group_name}
+SEASON: {season}
+MOOD: {mood}
+LABEL: {label}
+IMAGE SOURCE: {source}
+PROMPT SOURCE: {prompt_source}
+SEO SOURCE: {seo_source}
+FILE: {os.path.basename(txt_path).replace('.txt', '.png')}
+"""
+    with open(txt_path, "w", encoding="utf-8") as f:
+        f.write(content)
+
+# ════════════════════════════════════════════════════════════
+# MAIN
 # ════════════════════════════════════════════════════════════
 if __name__ == "__main__":
 
-    if all_repos_full():
-        print("✅ كل الـ repos ممتلئة! (10,000 صورة)")
-        exit(0)
-
-    start_from = get_next_number()
-
     print("=" * 60)
-    print(f"  Batch Image Generator — GitHub Actions")
-    print(f"  البداية من      : {start_from}")
-    print(f"  الهدف           : {TOTAL_TARGET}")
-    print(f"  المتبقي         : {TOTAL_TARGET - start_from + 1}")
-    print(f"  البيئات         : {len(GROUPS)} groups")
-    print(f"  push كل         : {PUSH_EVERY} صورة")
-    for i in range(1, TOTAL_REPOS + 1):
-        count = count_images_in_repo(i)
-        print(f"  img{i:<3}          : {count}/{IMAGES_PER_REPO}")
+    print("  Stock Image Generator — GitHub Actions")
     print("=" * 60)
 
-    success = 0
-    fail    = 0
-    num     = start_from
+    print("  Loading groups...")
+    ALL_GROUPS = load_all_groups()
+    print(f"  Total groups: {len(ALL_GROUPS)}")
 
-    while num <= TOTAL_TARGET:
+    print("  Loading SEO module...")
+    GEN_TITLE, GET_SEO = load_seo_module()
 
-        if all_repos_full():
-            print("\n✅ كل الـ repos ممتلئة! 10,000 صورة اكتملت!")
-            push_all_repos()
+    if not ALL_GROUPS:
+        print("❌ No groups found!")
+        exit(1)
+
+    total_generated = get_total_generated()
+    total_capacity  = IMAGES_PER_REPO * TOTAL_REPOS
+
+    print(f"  Generated so far : {total_generated}")
+    print(f"  Total capacity   : {total_capacity}")
+    print(f"  Images this run  : {IMAGES_PER_RUN}")
+    print(f"  Push every       : {PUSH_EVERY}")
+    print("=" * 60)
+
+    success      = 0
+    fail         = 0
+    since_push   = 0
+    last_repo    = None
+
+    for _ in range(IMAGES_PER_RUN):
+
+        repo_num, img_num, repo_dir = get_next_slot()
+        if repo_num is None:
+            print("✅ All repos full!")
             break
 
-        repo_dir, repo_index = get_repo_dir(num)
+        img_path = os.path.join(repo_dir, f"{img_num}.png")
+        txt_path = os.path.join(repo_dir, f"{img_num}.txt")
 
-        if count_images_in_repo(repo_index) >= IMAGES_PER_REPO:
-            num = (repo_index * IMAGES_PER_REPO) + 1
+        if os.path.exists(img_path) and os.path.exists(txt_path):
             continue
 
-        output_path = os.path.join(repo_dir, f"{num}.png")
-
-        if os.path.exists(output_path):
-            print(f"   [{num}/{TOTAL_TARGET}] موجود مسبقاً — تخطي")
-            num += 1
-            continue
+        print(f"\n   ── [repo{repo_num}/{img_num}] ──────────────────────")
 
         try:
-            prompt, label = generate_prompt()
-            generate_image(prompt, output_path)
+            base_data, label = generate_local_data(ALL_GROUPS)
+            group_name = base_data["group_name"]
+            season     = base_data["season"]
+            mood       = base_data["mood"]
+            keywords   = ALL_GROUPS[group_name].get("stock_keywords", [])
+            print(f"   📋 {label}")
 
-            success += 1
-            print(f"   [{num}/{TOTAL_TARGET}] ✅ | {label}")
-            num += 1
+            llm_output = get_llm7_output(base_data, keywords)
+
+            if llm_output:
+                final_prompt  = llm_output["prompt"]
+                prompt_source = "llm7"
+                seo = {
+                    "title":       llm_output["title"],
+                    "description": llm_output["description"],
+                    "category":    llm_output["category"],
+                    "keywords":    llm_output["keywords"],
+                    "orientation": "Horizontal",
+                    "media_type":  "Photography",
+                }
+                seo_source = "llm7"
+            else:
+                final_prompt  = build_local_prompt(base_data)
+                prompt_source = "local"
+                seo           = build_local_seo(group_name, season, mood, keywords, GEN_TITLE, GET_SEO)
+                seo_source    = "seo_titles"
+
+            source = generate_image(final_prompt, img_path, prompt_source)
+
+            save_txt(txt_path, seo, group_name, season, mood,
+                     label, source, prompt_source, seo_source)
+
+            success    += 1
+            since_push += 1
+            last_repo   = repo_num
+
+            print(f"   ✅ repo{repo_num}/{img_num} | img:{source} | prompt:{prompt_source}")
+            print(f"   📌 {seo['title'][:55]}")
+
+            # push كل 10 صور
+            if since_push >= PUSH_EVERY:
+                push_repo(repo_num)
+                since_push = 0
+
             time.sleep(SLEEP_BETWEEN)
 
         except Exception as e:
             fail += 1
             wait = random.randint(SLEEP_ON_FAIL[0], SLEEP_ON_FAIL[1])
-            print(f"   [{num}/{TOTAL_TARGET}] ⚠️ فشل: {e}")
-            print(f"   انتظار {wait} ثانية...")
+            print(f"   ❌ Failed: {e}")
+            print(f"   ⏳ Waiting {wait}s...")
             time.sleep(wait)
 
-        if success > 0 and success % PUSH_EVERY == 0:
-            push_all_repos()
-
-    push_all_repos()
+    # final push
+    if since_push > 0 and last_repo:
+        push_repo(last_repo)
 
     print("\n" + "=" * 60)
-    print(f"✅ انتهى الـ run!")
-    print(f"   نجح  : {success}")
-    print(f"   فشل  : {fail}")
+    print(f"✅ Run complete! Success: {success} | Failed: {fail}")
+    print(f"   Total generated: {get_total_generated()}")
     print("=" * 60)
