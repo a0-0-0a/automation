@@ -6,6 +6,7 @@ import glob
 import importlib
 import sys
 import re
+import subprocess
 from urllib.parse import quote
 
 # ════════════════════════════════════════════════════════════
@@ -15,14 +16,18 @@ PIXAZO_KEY    = os.environ.get("PIXAZO_KEY", "")
 GH_TOKEN      = os.environ.get("GH_TOKEN", "")
 GH_USERNAME   = os.environ.get("GH_USERNAME", "a0-0-0a")
 
-SCRIPT_DIR    = os.path.dirname(os.path.abspath(__file__))
-IMGS_DIR      = os.path.join(SCRIPT_DIR, "..", "imgs")
-IMAGES_PER_REPO = 1000
-TOTAL_REPOS     = 10
-PUSH_EVERY      = 10
-IMAGES_PER_RUN  = 200  # عدد الصور في كل run
-SLEEP_BETWEEN   = 5
-SLEEP_ON_FAIL   = (20, 40)
+SCRIPT_DIR       = os.path.dirname(os.path.abspath(__file__))
+IMGS_DIR         = os.path.join(SCRIPT_DIR, "..", "imgs")
+IMAGES_PER_REPO  = 333
+TOTAL_REPOS      = 30
+PUSH_EVERY       = 10
+IMAGES_PER_RUN   = 180
+SLEEP_BETWEEN    = 5
+SLEEP_ON_FAIL    = (20, 40)
+
+# LLM7 retry settings
+LLM7_API_RETRIES    = 3   # API connection retries
+LLM7_FILTER_RETRIES = 5   # retries when filter blocks output
 
 FORCED_PREFIX = (
     "Pure nature landscape photography only. "
@@ -58,8 +63,47 @@ WEIGHTED_GROUPS = {
 }
 
 # ════════════════════════════════════════════════════════════
-# الكلمات المحظورة
+# قائمة أسماء الأماكن والدول للتنظيف والفلتر
 # ════════════════════════════════════════════════════════════
+ALL_PLACE_NAMES = [
+    # دول
+    "norway", "norwegian", "swiss", "switzerland", "france", "french",
+    "italy", "italian", "germany", "german", "austria", "austrian",
+    "canada", "canadian", "usa", "american", "australia", "australian",
+    "brazil", "brazilian", "argentina", "chile", "peru", "bolivia",
+    "russia", "russian", "china", "chinese", "japan", "japanese",
+    "india", "indian", "nepal", "nepalese", "tibet", "tibetan",
+    "mongolia", "mongolian", "iceland", "icelandic", "greenland",
+    "alaska", "california", "colorado", "utah", "arizona",
+    "patagonia", "patagonian", "croatia", "croatian",
+    "jordan", "iran", "oman", "morocco", "moroccan",
+    "kenya", "tanzania", "scotland", "scottish", "ireland", "irish",
+    "wales", "england", "english", "spain", "spanish",
+    "portugal", "portuguese", "turkey", "turkish", "greece", "greek",
+    "saudi", "arabia", "uae", "emirates",
+    # مناطق
+    "sahara", "saharan", "alps", "alpine", "himalaya", "himalayan",
+    "andes", "andean", "rockies", "dolomites", "amazon", "patagonian",
+    "scandinavia", "scandinavian", "mediterranean", "caribbean",
+    "atlantic", "pacific", "siberia", "siberian", "gobi",
+    "kazakh", "kazakhstan", "appalachian", "tibetan",
+    # أماكن محددة
+    "banff", "yosemite", "plitvice", "namib", "atacama",
+    "lofoten", "faroe", "azores", "fjord", "fiord",
+    "eiger", "marmolada", "seceda", "lauterbrunnen",
+    "skogafoss", "geiranger", "nærøyfjord", "reynisfjara",
+    "cinque torri", "tre cime", "mont blanc",
+    "denali", "wadi rum", "erg chebbi", "rub al khali",
+    "big sur", "death valley", "moher", "etretat",
+    "calanques", "santorini", "dalmatian", "smeralda",
+    "abel tasman", "milford sound", "southern alps",
+    "baikal", "achensee", "moraine", "louise",
+    "borneo", "sabah", "daintree", "sumatra", "borneo",
+    "muir woods", "tongass", "olympic", "appalachian",
+    "białowieża", "bavarian", "black forest",
+]
+
+# الكلمات المحظورة في البروميت
 FORBIDDEN_WORDS = [
     "human", "humans", "person", "persons", "people", "man", "men",
     "woman", "women", "child", "children", "boy", "girl",
@@ -87,26 +131,7 @@ FORBIDDEN_WORDS = [
     "farm", "farms", "cabin", "hut", "tent", "cairn",
     "structure", "structures", "infrastructure", "architecture",
     "shelter", "camp", "campsite",
-    "norway", "norwegian", "swiss", "switzerland", "france", "french",
-    "italy", "italian", "germany", "german", "austria", "austrian",
-    "canada", "canadian", "usa", "american", "australia", "australian",
-    "brazil", "brazilian", "argentina", "chile", "peru", "bolivia",
-    "russia", "russian", "china", "chinese", "japan", "japanese",
-    "india", "indian", "nepal", "nepalese", "tibet", "tibetan",
-    "mongolia", "mongolian", "iceland", "icelandic", "greenland",
-    "alaska", "california", "colorado", "utah", "arizona",
-    "patagonia", "patagonian", "croatia", "croatian",
-    "jordan", "iran", "oman", "sahara", "saharan",
-    "amazon", "alps", "alpine", "dolomites", "himalaya", "himalayan",
-    "andes", "andean", "rockies", "banff", "yosemite", "plitvice",
-    "namib", "atacama", "gobi", "siberia", "siberian",
-    "lofoten", "faroe", "azores", "atlantic", "pacific",
-    "mediterranean", "caribbean", "scandinavia", "scandinavian",
-    "scotland", "scottish", "ireland", "irish", "wales",
-    "england", "english", "spain", "spanish", "portugal", "portuguese",
-    "turkey", "turkish", "greece", "greek", "morocco", "moroccan",
-    "kenya", "tanzania", "fjord", "fiord",
-]
+] + ALL_PLACE_NAMES
 
 def passes_filter(text):
     text_lower = text.lower()
@@ -115,6 +140,17 @@ def passes_filter(text):
         if re.search(pattern, text_lower):
             return False, word
     return True, None
+
+def sanitize_place_names(text):
+    """يحذف أسماء الأماكن والدول من النص"""
+    result = text
+    for name in ALL_PLACE_NAMES:
+        pattern = re.compile(r'\b' + re.escape(name) + r'\b', re.IGNORECASE)
+        result = pattern.sub("", result)
+    result = re.sub(r'\s+', ' ', result)
+    result = re.sub(r',\s*,', ',', result)
+    result = result.strip(' ,.-')
+    return result
 
 # ════════════════════════════════════════════════════════════
 # تحميل seo_titles
@@ -131,22 +167,37 @@ def load_seo_module():
         return None, None
 
 # ════════════════════════════════════════════════════════════
-# تحديد الـ repo والمسار التالي
+# إدارة الـ repos
 # ════════════════════════════════════════════════════════════
+def get_repo_count(repo_num):
+    """عدد الصور في repo معين"""
+    repo_dir = os.path.join(IMGS_DIR, f"img{repo_num}")
+    if not os.path.exists(repo_dir):
+        return 0
+    nums = set()
+    for f in os.listdir(repo_dir):
+        if f.endswith(".png"):
+            base = f.replace("x.png", "").replace(".png", "")
+            if base.isdigit():
+                nums.add(int(base))
+    return len(nums)
+
 def get_next_slot():
-    """يرجع (repo_num, next_img_num, output_path)"""
+    """يرجع (repo_num, next_img_num, repo_dir) أو (None, None, None) إذا كل الـ repos ممتلئة"""
     for repo_num in range(1, TOTAL_REPOS + 1):
         repo_dir = os.path.join(IMGS_DIR, f"img{repo_num}")
         os.makedirs(repo_dir, exist_ok=True)
 
-        existing = [
-            int(f.split(".")[0]) for f in os.listdir(repo_dir)
-            if f.endswith(".png") and f.split(".")[0].isdigit()
-        ]
+        existing_nums = set()
+        for f in os.listdir(repo_dir):
+            if f.endswith(".png"):
+                base = f.replace("x.png", "").replace(".png", "")
+                if base.isdigit():
+                    existing_nums.add(int(base))
 
-        count = len(existing)
+        count = len(existing_nums)
         if count < IMAGES_PER_REPO:
-            next_num = max(existing) + 1 if existing else 1
+            next_num = max(existing_nums) + 1 if existing_nums else 1
             return repo_num, next_num, repo_dir
 
     return None, None, None
@@ -154,9 +205,7 @@ def get_next_slot():
 def get_total_generated():
     total = 0
     for repo_num in range(1, TOTAL_REPOS + 1):
-        repo_dir = os.path.join(IMGS_DIR, f"img{repo_num}")
-        if os.path.exists(repo_dir):
-            total += len([f for f in os.listdir(repo_dir) if f.endswith(".png")])
+        total += get_repo_count(repo_num)
     return total
 
 # ════════════════════════════════════════════════════════════
@@ -165,7 +214,6 @@ def get_total_generated():
 def push_repo(repo_num):
     repo_dir = os.path.join(IMGS_DIR, f"img{repo_num}")
     try:
-        import subprocess
         cmds = [
             ["git", "-C", repo_dir, "config", "user.email", "action@github.com"],
             ["git", "-C", repo_dir, "config", "user.name", "GitHub Action"],
@@ -174,7 +222,6 @@ def push_repo(repo_num):
         for cmd in cmds:
             subprocess.run(cmd, check=True, capture_output=True)
 
-        # تحقق إذا في تغييرات
         result = subprocess.run(
             ["git", "-C", repo_dir, "status", "--porcelain"],
             capture_output=True, text=True
@@ -217,9 +264,6 @@ def load_all_groups():
             print(f"   ⚠️ failed {os.path.basename(filepath)}: {e}")
     return all_groups
 
-# ════════════════════════════════════════════════════════════
-# اختيار group بالوزن
-# ════════════════════════════════════════════════════════════
 def pick_weighted_group(all_groups):
     weighted = []
     for name in all_groups:
@@ -253,35 +297,40 @@ def generate_local_data(all_groups):
     return base_data, label
 
 # ════════════════════════════════════════════════════════════
-# البروميت المحلي
+# البروميت المحلي — بدون أسماء أماكن
 # ════════════════════════════════════════════════════════════
 def build_local_prompt(base_data):
+    # نظّف الـ location من أسماء الأماكن
+    clean_loc  = sanitize_place_names(base_data["location"])
+    clean_fore = sanitize_place_names(base_data["foreground"])
+    clean_mood = sanitize_place_names(base_data["mood"])
+
     return (
-        f"{base_data['location']}, {base_data['season']}. "
+        f"{clean_loc}, {base_data['season']}. "
         f"{base_data['time_day']}. "
         f"Composition: {base_data['composition']}. "
-        f"Foreground: {base_data['foreground']}. "
-        f"Mood: {base_data['mood']}."
+        f"Foreground: {clean_fore}. "
+        f"Mood: {clean_mood}."
     )
 
 # ════════════════════════════════════════════════════════════
-# SEO محلي
+# SEO محلي — من seo_titles.py بدون أسماء أماكن
 # ════════════════════════════════════════════════════════════
-def build_local_seo(group_name, season, mood, keywords,
-                    gen_title_fn, get_data_fn):
+def build_local_seo(group_name, season, mood, keywords, gen_title_fn, get_data_fn):
     title    = gen_title_fn(group_name) if gen_title_fn else f"Natural {group_name.replace('_', ' ').title()} Landscape"
     seo_data = get_data_fn(group_name) if get_data_fn else None
 
     if seo_data and seo_data.get("descriptions"):
         description = random.choice(seo_data["descriptions"])
     else:
-        description = f"Stunning {group_name.replace('_', ' ')} landscape. {mood}. Perfect for backgrounds, wallpapers, editorial, and nature projects."
+        description = f"Stunning {group_name.replace('_', ' ')} landscape. {sanitize_place_names(mood)}. Perfect for backgrounds, wallpapers, editorial, and nature projects."
 
     category = seo_data["category"] if seo_data else "Nature"
     core_kw  = seo_data["keywords_core"] if seo_data else []
 
     season_words = [w.strip() for w in season.replace(",", " ").split()[:3] if len(w) > 3]
-    mood_words   = [w.strip() for w in mood.replace(",", " ").split()[:3] if len(w) > 3]
+    mood_clean   = sanitize_place_names(mood)
+    mood_words   = [w.strip() for w in mood_clean.replace(",", " ").split()[:3] if len(w) > 3]
 
     all_keywords = list(set(
         core_kw + keywords + season_words + mood_words + [
@@ -291,11 +340,15 @@ def build_local_seo(group_name, season, mood, keywords,
         ]
     ))
 
+    # نظّف الـ keywords من أسماء الأماكن
+    cleaned_kw = [sanitize_place_names(kw) for kw in all_keywords]
+    cleaned_kw = [kw for kw in cleaned_kw if kw.strip()]
+
     return {
-        "title":       title,
-        "description": description,
+        "title":       sanitize_place_names(title),
+        "description": sanitize_place_names(description),
         "category":    category,
-        "keywords":    ", ".join(all_keywords[:60]),
+        "keywords":    ", ".join(cleaned_kw[:60]),
         "orientation": "Horizontal",
         "media_type":  "Photography",
     }
@@ -320,16 +373,58 @@ def call_llm7(user_message):
     response.raise_for_status()
     return response.json()["choices"][0]["message"]["content"].strip()
 
+def parse_llm7_raw(raw):
+    """يحول الـ raw output إلى dict"""
+    result = {
+        "prompt":      "",
+        "title":       "",
+        "description": "",
+        "category":    "Nature",
+        "keywords":    "",
+    }
+
+    current_key = None
+    current_val = []
+
+    for line in raw.split("\n"):
+        clean = line.strip().replace("**", "").replace("*", "")
+        if not clean:
+            continue
+
+        matched_key = None
+        for key in result:
+            if clean.upper().startswith(key.upper() + ":"):
+                matched_key = key
+                break
+
+        if matched_key:
+            if current_key and current_val:
+                result[current_key] = " ".join(current_val).strip()
+            current_key = matched_key
+            inline = clean.split(":", 1)[1].strip()
+            current_val = [inline] if inline else []
+        else:
+            if current_key:
+                current_val.append(clean)
+
+    if current_key and current_val:
+        result[current_key] = " ".join(current_val).strip()
+
+    return result
+
 # ════════════════════════════════════════════════════════════
 # LLM7 يولّد prompt + SEO
+# 3 retries للـ API errors
+# 5 retries إذا الفلتر حجب الـ output
 # ════════════════════════════════════════════════════════════
 def get_llm7_output(base_data, keywords):
     env_type   = base_data["group_name"].replace("_", " ")
-    loc        = base_data["location"][:60]
+    # نظّف الـ location من أسماء الأماكن قبل إرساله للـ AI
+    loc        = sanitize_place_names(base_data["location"])[:60]
     time_day   = base_data["time_day"][:40]
     season     = base_data["season"][:40]
-    foreground = base_data["foreground"][:40]
-    mood       = base_data["mood"][:40]
+    foreground = sanitize_place_names(base_data["foreground"])[:40]
+    mood       = sanitize_place_names(base_data["mood"])[:40]
     kw         = ", ".join(keywords[:6])
 
     USER = (
@@ -339,80 +434,64 @@ def get_llm7_output(base_data, keywords):
         f"PROMPT: [4 vivid sentences. Describe ONLY what is visually present: "
         f"rocks, sky, light, terrain, plants, water, clouds, sand, texture. "
         f"Write purely what you SEE. Use only positive visual descriptions. "
-        f"Use only general visual terms, no specific place names.]\n"
-        f"TITLE: [5-8 words visual description, no specific place names]\n"
-        f"DESCRIPTION: [2 sentences about visual scene and use cases]\n"
+        f"Use ONLY general visual terms — absolutely no country names, "
+        f"no city names, no mountain names, no lake names, no river names, "
+        f"no region names. No specific geographic references of any kind.]\n"
+        f"TITLE: [5-8 words visual description only, zero place names, zero country names]\n"
+        f"DESCRIPTION: [2 sentences about visual scene and use cases, no place names]\n"
         f"CATEGORY: Nature\n"
-        f"KEYWORDS: [40 comma-separated visual keywords, no specific place names, include: {kw}]"
+        f"KEYWORDS: [40 comma-separated visual keywords, no place names, no country names, include: {kw}]"
     )
 
-    for attempt in range(3):
-        try:
-            print(f"   🤖 LLM7 generating (attempt {attempt+1}/3)...")
-            raw = call_llm7(USER)
+    filter_attempts = 0
 
-            if not raw or len(raw) < 100:
-                print(f"   ⚠️ LLM7 empty — retrying...")
-                time.sleep(3)
-                continue
+    while filter_attempts < LLM7_FILTER_RETRIES:
+        # محاولات الـ API
+        raw = None
+        for api_attempt in range(LLM7_API_RETRIES):
+            try:
+                print(f"   🤖 LLM7 generating (filter:{filter_attempts+1}/{LLM7_FILTER_RETRIES} api:{api_attempt+1}/{LLM7_API_RETRIES})...")
+                raw = call_llm7(USER)
+                break
+            except Exception as e:
+                print(f"   ⚠️ LLM7 API error (api:{api_attempt+1}/{LLM7_API_RETRIES}): {e}")
+                time.sleep(5 * (api_attempt + 1))
 
-            result = {
-                "prompt":      "",
-                "title":       "",
-                "description": "",
-                "category":    "Nature",
-                "keywords":    "",
-            }
+        if not raw or len(raw) < 100:
+            print(f"   ⚠️ LLM7 API failed {LLM7_API_RETRIES} times — using local fallback")
+            return None
 
-            current_key = None
-            current_val = []
+        # parsing
+        result = parse_llm7_raw(raw)
 
-            for line in raw.split("\n"):
-                clean = line.strip().replace("**", "").replace("*", "")
-                if not clean:
-                    continue
+        if not result["prompt"] or not result["title"] or not result["keywords"]:
+            print(f"   ⚠️ LLM7 output incomplete — retrying filter attempt {filter_attempts+1}")
+            filter_attempts += 1
+            time.sleep(3)
+            continue
 
-                matched_key = None
-                for key in result:
-                    if clean.upper().startswith(key.upper() + ":"):
-                        matched_key = key
-                        break
+        # فلتر البروميت
+        ok, bad = passes_filter(result["prompt"])
+        if not ok:
+            print(f"   ⚠️ Filter blocked '{bad}' (filter attempt {filter_attempts+1}/{LLM7_FILTER_RETRIES})")
+            filter_attempts += 1
+            time.sleep(2)
+            continue
 
-                if matched_key:
-                    if current_key and current_val:
-                        result[current_key] = " ".join(current_val).strip()
-                    current_key = matched_key
-                    inline = clean.split(":", 1)[1].strip()
-                    current_val = [inline] if inline else []
-                else:
-                    if current_key:
-                        current_val.append(clean)
+        # تنظيف الـ SEO من أسماء الأماكن
+        result["title"]       = sanitize_place_names(result["title"])
+        result["description"] = sanitize_place_names(result["description"])
+        result["keywords"]    = sanitize_place_names(result["keywords"])
 
-            if current_key and current_val:
-                result[current_key] = " ".join(current_val).strip()
+        # تحقق من الـ title بعد التنظيف
+        if not result["title"].strip():
+            filter_attempts += 1
+            continue
 
-            if not result["prompt"] or not result["title"] or not result["keywords"]:
-                print(f"   ⚠️ LLM7 incomplete — retrying...")
-                time.sleep(3)
-                continue
+        print(f"   ✅ LLM7 ready ✓")
+        return result
 
-            ok, bad = passes_filter(result["prompt"])
-            if not ok:
-                print(f"   ⚠️ LLM7 prompt contains '{bad}' — using local")
-                return None
-
-            ok2, bad2 = passes_filter(result["title"])
-            if not ok2:
-                result["title"] = result["title"].replace(bad2, "").strip()
-
-            print(f"   ✅ LLM7 ready ✓")
-            return result
-
-        except Exception as e:
-            print(f"   ⚠️ LLM7 error (attempt {attempt+1}/3): {e}")
-            time.sleep(5)
-
-    print(f"   ⚠️ LLM7 failed — using local fallback")
+    print(f"   ⚠️ LLM7 blocked {LLM7_FILTER_RETRIES} filter attempts — using local fallback")
     return None
 
 # ════════════════════════════════════════════════════════════
@@ -452,6 +531,7 @@ def generate_image(final_prompt, output_path, prompt_source):
 
     except Exception as e:
         print(f"   ⚠️ Pixazo failed: {e}")
+        print(f"   🔄 Switching to Pollinations FLUX.1-dev...")
 
     # Fallback: Pollinations
     try:
@@ -479,6 +559,7 @@ def generate_image(final_prompt, output_path, prompt_source):
 # ════════════════════════════════════════════════════════════
 def save_txt(txt_path, seo, group_name, season, mood, label,
              source, prompt_source, seo_source):
+    filename = os.path.basename(txt_path).replace(".txt", "")
     content = f"""TITLE:
 {seo['title']}
 
@@ -505,7 +586,7 @@ LABEL: {label}
 IMAGE SOURCE: {source}
 PROMPT SOURCE: {prompt_source}
 SEO SOURCE: {seo_source}
-FILE: {os.path.basename(txt_path).replace('.txt', '.png')}
+FILE: {filename}.png
 """
     with open(txt_path, "w", encoding="utf-8") as f:
         f.write(content)
@@ -533,31 +614,33 @@ if __name__ == "__main__":
     total_generated = get_total_generated()
     total_capacity  = IMAGES_PER_REPO * TOTAL_REPOS
 
-    print(f"  Generated so far : {total_generated}")
-    print(f"  Total capacity   : {total_capacity}")
-    print(f"  Images this run  : {IMAGES_PER_RUN}")
-    print(f"  Push every       : {PUSH_EVERY}")
+    print(f"  Generated so far  : {total_generated}")
+    print(f"  Total capacity    : {total_capacity}")
+    print(f"  Remaining capacity: {total_capacity - total_generated}")
+    print(f"  Images this run   : {IMAGES_PER_RUN}")
+    print(f"  Repos             : {TOTAL_REPOS} × {IMAGES_PER_REPO} = {total_capacity}")
+    print(f"  Push every        : {PUSH_EVERY}")
     print("=" * 60)
+
+    if total_generated >= total_capacity:
+        print("✅ All images already generated!")
+        exit(0)
 
     success      = 0
     fail         = 0
     since_push   = 0
     last_repo    = None
+    modified_repos = set()
 
-    for _ in range(IMAGES_PER_RUN):
+    # نستخدم while بدل for — يكمل حتى يصل للهدف
+    while success < IMAGES_PER_RUN:
 
         repo_num, img_num, repo_dir = get_next_slot()
         if repo_num is None:
-            print("✅ All repos full!")
+            print("✅ All repos full — done!")
             break
 
-        img_path = os.path.join(repo_dir, f"{img_num}.png")
-        txt_path = os.path.join(repo_dir, f"{img_num}.txt")
-
-        if os.path.exists(img_path) and os.path.exists(txt_path):
-            continue
-
-        print(f"\n   ── [repo{repo_num}/{img_num}] ──────────────────────")
+        print(f"\n   ── [repo{repo_num}/{img_num} | run:{success+1}/{IMAGES_PER_RUN}] ──")
 
         try:
             base_data, label = generate_local_data(ALL_GROUPS)
@@ -567,11 +650,13 @@ if __name__ == "__main__":
             keywords   = ALL_GROUPS[group_name].get("stock_keywords", [])
             print(f"   📋 {label}")
 
+            # LLM7 → 3 API retries + 5 filter retries → local fallback
             llm_output = get_llm7_output(base_data, keywords)
 
             if llm_output:
                 final_prompt  = llm_output["prompt"]
                 prompt_source = "llm7"
+                is_fallback   = False
                 seo = {
                     "title":       llm_output["title"],
                     "description": llm_output["description"],
@@ -582,24 +667,35 @@ if __name__ == "__main__":
                 }
                 seo_source = "llm7"
             else:
+                # ═══ FALLBACK ═══
+                print(f"   📝 Building local prompt (fallback)...")
                 final_prompt  = build_local_prompt(base_data)
                 prompt_source = "local"
-                seo           = build_local_seo(group_name, season, mood, keywords, GEN_TITLE, GET_SEO)
-                seo_source    = "seo_titles"
+                is_fallback   = True
+                print(f"   📝 Building local SEO (fallback)...")
+                seo       = build_local_seo(group_name, season, mood, keywords, GEN_TITLE, GET_SEO)
+                seo_source = "seo_titles"
+
+            # تسمية الملف — الـ fallback يأخذ "x" في النهاية
+            suffix   = "x" if is_fallback else ""
+            img_path = os.path.join(repo_dir, f"{img_num}{suffix}.png")
+            txt_path = os.path.join(repo_dir, f"{img_num}{suffix}.txt")
 
             source = generate_image(final_prompt, img_path, prompt_source)
 
             save_txt(txt_path, seo, group_name, season, mood,
                      label, source, prompt_source, seo_source)
 
-            success    += 1
+            success += 1
             since_push += 1
             last_repo   = repo_num
+            modified_repos.add(repo_num)
 
-            print(f"   ✅ repo{repo_num}/{img_num} | img:{source} | prompt:{prompt_source}")
+            fallback_tag = " [FALLBACK ⚠️]" if is_fallback else ""
+            print(f"   ✅ repo{repo_num}/{img_num}{suffix} | img:{source} | prompt:{prompt_source}{fallback_tag}")
             print(f"   📌 {seo['title'][:55]}")
 
-            # push كل 10 صور
+            # push كل PUSH_EVERY صور
             if since_push >= PUSH_EVERY:
                 push_repo(repo_num)
                 since_push = 0
@@ -612,12 +708,17 @@ if __name__ == "__main__":
             print(f"   ❌ Failed: {e}")
             print(f"   ⏳ Waiting {wait}s...")
             time.sleep(wait)
+            # لا يزيد success → يحاول مرة أخرى تلقائياً
 
-    # final push
-    if since_push > 0 and last_repo:
-        push_repo(last_repo)
+    # final push لكل الـ repos المعدّلة
+    print(f"\n   📤 Final push for modified repos...")
+    for repo_num in modified_repos:
+        push_repo(repo_num)
 
+    final_total = get_total_generated()
     print("\n" + "=" * 60)
-    print(f"✅ Run complete! Success: {success} | Failed: {fail}")
-    print(f"   Total generated: {get_total_generated()}")
+    print(f"✅ Run complete!")
+    print(f"   This run: {success} ✅ | {fail} ❌")
+    print(f"   Total generated: {final_total} / {total_capacity}")
+    print(f"   Remaining: {total_capacity - final_total}")
     print("=" * 60)
