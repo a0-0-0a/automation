@@ -2,8 +2,8 @@ name: Stock Image Generator
 
 on:
   schedule:
-    - cron: '0 */5 * * *'  # كل 5 ساعات
-  workflow_dispatch:        # تشغيل يدوي
+    - cron: '0 */5 * * *'
+  workflow_dispatch:
 
 jobs:
   generate:
@@ -24,35 +24,44 @@ jobs:
 
       - name: Clone all image repos
         run: |
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          for i in $(seq 1 30); do
             git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img-$i.git imgs/img$i
             echo "✅ Cloned img-$i"
           done
 
       - name: Run stock pipeline
         env:
-          PIXAZO_KEY:    ${{ secrets.PIXAZO_KEY }}
-          GH_TOKEN:      ${{ secrets.GH_TOKEN }}
-          GH_USERNAME:   a0-0-0a
+          PIXAZO_KEY:  ${{ secrets.PIXAZO_KEY }}
+          GH_TOKEN:    ${{ secrets.GH_TOKEN }}
+          GH_USERNAME: a0-0-0a
         run: |
           cd scripts
           python3 stock_pipeline.py
 
       - name: Push all image repos
         run: |
-          for i in 1 2 3 4 5 6 7 8 9 10; do
+          for i in $(seq 1 30); do
             cd imgs/img$i
             git config user.email "action@github.com"
             git config user.name "GitHub Action"
             git add -A
             COUNT=$(git status --porcelain | wc -l)
             if [ "$COUNT" -gt "0" ]; then
-              git commit -m "add $COUNT images"
+              git commit -m "add images"
               git checkout -B main
               git push -u origin main
               echo "✅ Pushed img-$i"
             else
-              echo "⏭ Nothing to push in img-$i"
+              echo "⏭ Nothing new in img-$i"
             fi
             cd ../..
           done
+
+      - name: Keep repo active
+        run: |
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          echo "Last run: $(date)" > last_run.txt
+          git add last_run.txt
+          git commit -m "update run log" || echo "nothing to commit"
+          git push || echo "nothing to push"
