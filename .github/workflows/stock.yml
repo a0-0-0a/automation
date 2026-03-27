@@ -71,3 +71,23 @@ jobs:
           git add last_run.txt
           git commit -m "update run log" || echo "nothing to commit"
           git push || echo "nothing to push"
+
+      - name: Trigger next run
+        run: |
+          REMAINING=$(python3 -c "
+          import sys
+          sys.path.insert(0, 'scripts_repo')
+          sys.path.insert(0, 'scripts')
+          from engine.repo_manager import get_total_generated
+          total = get_total_generated('imgs', 30)
+          capacity = 333 * 30
+          print(capacity - total)
+          " 2>/dev/null || echo "999")
+          if [ "$REMAINING" -gt "0" ]; then
+            curl -X POST \
+              -H "Authorization: token ${{ secrets.GH_TOKEN }}" \
+              -H "Accept: application/vnd.github.v3+json" \
+              https://api.github.com/repos/a0-0-0a/YOUR-AUTOMATION-REPO/actions/workflows/stock.yml/dispatches \
+              -d '{"ref":"main"}' || echo "trigger failed"
+            echo "✅ Next run triggered"
+          fi
