@@ -25,13 +25,13 @@ ALL_TIMES = DAYTIME + GOLDEN
 GROUPS = {
     "dramatic_sea_cliffs": {
         "locations": [
-            "Faroe Islands, sheer dramatic green cliffs above Atlantic ocean",
-            "Big Sur California, dramatic rocky Pacific coastline cliffs",
-            "Wild Atlantic Way Ireland, jagged raw Atlantic rocky coastline",
-            "Moher Cliffs Ireland, sheer limestone above green Atlantic",
-            "Cape Breton Nova Scotia, dramatic high cliff coastline",
-            "Azores volcanic cliffs, dark black rock above Atlantic ocean",
-            "Etretat France, white chalk cliffs above deep blue sea",
+            "sheer dramatic green cliffs above ocean",
+            "dramatic rocky coastline cliffs",
+            "jagged raw rocky coastline",
+            "sheer limestone cliffs above green sea",
+            "dramatic high cliff coastline",
+            "volcanic cliffs, dark black rock above ocean",
+            "white chalk cliffs above deep blue sea",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_OCEAN,
@@ -55,19 +55,19 @@ GROUPS = {
             "fresh sea air, crisp clear natural coastal light",
         ],
         "stock_keywords": [
-            "ocean", "sea cliffs", "coast", "Atlantic", "coastal", "dramatic",
+            "ocean", "sea cliffs", "coast", "coastal", "dramatic",
             "marine", "seascape", "rocky", "waves", "shore", "cliffs", "nature"
         ],
     },
     "beach_seascape": {
         "locations": [
-            "Iceland Reynisfjara, black volcanic sand beach basalt columns",
-            "Calanques France, white limestone cliffs above vivid turquoise water",
-            "Sardinia Costa Smeralda, vivid turquoise sea white rocky beach",
-            "Lofoten Norway, jagged dramatic peaks above dark cold sea",
-            "New Zealand Abel Tasman, golden sand vivid clear water",
-            "Greece Santorini caldera, deep vivid blue sea dramatic view",
-            "Croatia Dalmatian coast, vivid turquoise sea rocky shore",
+            "black volcanic sand beach basalt columns",
+            "white limestone cliffs above vivid turquoise water",
+            "vivid turquoise sea white rocky beach",
+            "jagged dramatic peaks above dark cold sea",
+            "golden sand vivid clear water",
+            "deep vivid blue sea dramatic view",
+            "vivid turquoise sea rocky shore",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_OCEAN,
