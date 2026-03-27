@@ -21,13 +21,13 @@ ALL_TIMES = DAYTIME
 GROUPS = {
     "temperate_forest": {
         "locations": [
-            "Muir Woods California, towering ancient redwood trunks bright",
-            "Białowieża primeval forest Poland, ancient massive oak trees",
-            "Olympic rainforest Washington, moss-draped trees bright floor",
-            "Appalachian forest USA, dense ancient deciduous forest bright",
-            "Black Forest Germany, dense spruce dramatic bright light shafts",
-            "Tongass Alaska, old-growth temperate rainforest bright floor",
-            "Bavarian forest Germany, ancient mixed forest bright light",
+            "towering ancient redwood trunks bright",
+            "ancient massive oak trees",
+            "moss-draped trees bright floor",
+            "dense ancient deciduous forest bright",
+            "dense spruce dramatic bright light shafts",
+            "old-growth temperate rainforest bright floor",
+            "ancient mixed forest bright light",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_FOREST,
@@ -58,11 +58,11 @@ GROUPS = {
     },
     "tropical_forest": {
         "locations": [
-            "Amazon rainforest canopy Brazil, dense uneven treetops from above",
-            "Borneo Sabah rainforest, ancient towering emergent trees bright",
-            "Daintree rainforest Australia, ancient tropical bright forest",
-            "Congo basin forest, dense humid forest bright interior",
-            "Sumatra lowland rainforest, massive ancient trees bright shafts",
+            "dense uneven treetops from above",
+            "ancient towering emergent trees bright",
+            "ancient tropical bright forest",
+            "dense humid forest bright interior",
+            "massive ancient trees bright shafts",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_FOREST,
@@ -88,7 +88,7 @@ GROUPS = {
         ],
         "stock_keywords": [
             "rainforest", "tropical", "jungle", "green", "canopy", "nature",
-            "lush", "Amazon", "Borneo", "forest", "humid", "ancient", "bright"
+            "lush", "forest", "humid", "ancient", "bright"
         ],
     },
 }
