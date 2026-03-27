@@ -31,14 +31,14 @@ ALL_TIMES = DAYTIME + GOLDEN
 GROUPS = {
     "limestone_peaks": {
         "locations": [
-            "Dolomites South Tyrol Italy, pale vertical limestone towers",
-            "Swiss Alps Lauterbrunnen, vertical cliffs with hanging waterfalls",
-            "Dolomites Tre Cime Italy, three vertical rock towers blue sky",
-            "Alps Austria, steep green slopes with pale rocky peaks above",
-            "Dolomites Seceda Italy, dramatic ridgeline against vivid blue sky",
-            "Dolomites Cinque Torri Italy, five rock towers on open plateau",
-            "Swiss Alps Eiger, massive north face sheer vertical wall",
-            "Dolomites Marmolada Italy, highest peak with massive glacier",
+            "pale vertical limestone towers",
+            "vertical cliffs with hanging waterfalls",
+            "three vertical rock towers blue sky",
+            "steep green slopes with pale rocky peaks above",
+            "dramatic ridgeline against vivid blue sky",
+            "five rock towers on open plateau",
+            "massive north face sheer vertical wall",
+            "highest peak with massive glacier",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_MOUNTAIN,
@@ -63,20 +63,20 @@ GROUPS = {
             "brilliant clear real mountain day, vivid saturated natural colors",
         ],
         "stock_keywords": [
-            "mountain", "alpine", "Dolomites", "Alps", "peaks", "landscape",
+            "mountain", "alpine", "peaks", "landscape",
             "nature", "scenic", "snow", "rocky", "elevation", "majestic", "real"
         ],
     },
     "granite_peaks": {
         "locations": [
-            "Patagonia Torres del Paine Chile, jagged granite spires dramatic sky",
-            "Canadian Rockies Banff, dramatic rocky peaks above turquoise lake",
-            "Mont Blanc French Alps, massive glacier and real snow peak",
-            "Himalayas Nepal, massive real snow peaks above real clouds",
-            "New Zealand Southern Alps, snow peaks above real green valleys",
-            "Lofoten Norway, jagged real peaks rising dramatically from dark sea",
-            "Alaska Denali wilderness, massive real granite peak above tundra",
-            "Yosemite Valley California, massive granite walls and domes",
+            "jagged granite spires dramatic sky",
+            "dramatic rocky peaks above turquoise lake",
+            "massive glacier and real snow peak",
+            "massive real snow peaks above real clouds",
+            "snow peaks above real green valleys",
+            "jagged real peaks rising dramatically from dark sea",
+            "massive real granite peak above tundra",
+            "massive granite walls and domes",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_MOUNTAIN,
@@ -101,7 +101,7 @@ GROUPS = {
             "brilliant vivid real mountain day, maximum natural clarity",
         ],
         "stock_keywords": [
-            "mountain", "granite", "peaks", "Patagonia", "Rockies", "landscape",
+            "mountain", "granite", "peaks", "landscape",
             "nature", "scenic", "snow", "dramatic", "wilderness", "epic", "real"
         ],
     },
