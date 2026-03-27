@@ -24,13 +24,13 @@ ALL_TIMES = DAYTIME + GOLDEN
 GROUPS = {
     "saharan_dunes": {
         "locations": [
-            "Saharan desert Algeria, massive asymmetric orange sand dunes",
-            "Rub al Khali Saudi Arabia, endless deep red star dunes",
-            "Sahara desert Morocco, golden sand sea stretching to horizon",
-            "Arabian desert Oman, pristine untouched golden dunes",
-            "Sahara desert Libya, perfect undisturbed sand dune field",
-            "Erg Chebbi Morocco, classic tall orange Saharan dunes",
-            "Empty Quarter UAE, massive smooth red sand dunes",
+            "massive asymmetric orange sand dunes",
+            "endless deep red star dunes",
+            "golden sand sea stretching to horizon",
+            "pristine untouched golden dunes",
+            "perfect undisturbed sand dune field",
+            "classic tall orange desert dunes",
+            "massive smooth red sand dunes",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_DESERT,
@@ -54,18 +54,18 @@ GROUPS = {
             "rich warm tones, saturated golden desert atmosphere",
         ],
         "stock_keywords": [
-            "desert", "sand dunes", "Sahara", "arid", "golden", "landscape",
+            "desert", "sand dunes", "arid", "golden", "landscape",
             "nature", "scenic", "background", "wallpaper", "warm", "minimal"
         ],
     },
     "rocky_desert": {
         "locations": [
-            "Wadi Rum Jordan, massive red sandstone canyon formations",
-            "Atacama desert Chile, pale cracked salt and strange rock formations",
-            "Sonoran desert Arizona, rocky terrain with massive rounded boulders",
-            "Dasht-e Kavir Iran, vast white salt flat with distant mountains",
-            "Death Valley California, cracked salt pan with geometric patterns",
-            "White Sands New Mexico, pure white gypsum dune field",
+            "massive red sandstone canyon formations",
+            "pale cracked salt and strange rock formations",
+            "rocky terrain with massive rounded boulders",
+            "vast white salt flat with distant mountains",
+            "cracked salt pan with geometric patterns",
+            "pure white gypsum dune field",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_DESERT,
@@ -90,7 +90,7 @@ GROUPS = {
         ],
         "stock_keywords": [
             "desert", "rock", "canyon", "arid", "geology", "landscape",
-            "red rock", "sandstone", "nature", "scenic", "southwest", "dry"
+            "red rock", "sandstone", "nature", "scenic", "dry"
         ],
     },
 }
