@@ -10,11 +10,11 @@ COMPOSITIONS_SKY = [
 GROUPS = {
     "golden_sky": {
         "locations": [
-            "open flat plain USA, sky fills 75% of frame, flat low natural horizon",
-            "ocean horizon Atlantic, natural sky reflected in calm still water",
-            "open steppe Kazakhstan, low flat horizon, natural golden sky above",
-            "desert flat plain Sahara, natural sky, minimal flat sandy ground",
-            "open flat prairie Canada, natural sky above flat landscape",
+            "open flat plain, sky fills 75% of frame, flat low natural horizon",
+            "ocean horizon, natural sky reflected in calm still water",
+            "open steppe, low flat horizon, natural golden sky above",
+            "desert flat plain, natural sky, minimal flat sandy ground",
+            "open flat prairie, natural sky above flat landscape",
         ],
         "times": [
             "golden hour 30 minutes before sunset, natural warm realistic tones, real sky",
@@ -49,11 +49,11 @@ GROUPS = {
     },
     "dramatic_clouds": {
         "locations": [
-            "open flat prairie USA, massive natural cloud formations above",
-            "open Kazakh steppe, endless natural dramatic sky with real clouds",
-            "Atacama desert plain Chile, towering natural cumulus clouds above",
-            "flat Atlantic coastal area Ireland, natural dramatic clouds above sea",
-            "high Tibetan plateau, natural clouds at same level as ground",
+            "open flat prairie, massive natural cloud formations above",
+            "open steppe, endless natural dramatic sky with real clouds",
+            "desert plain, towering natural cumulus clouds above",
+            "flat coastal area, natural dramatic clouds above sea",
+            "high plateau, natural clouds at same level as ground",
         ],
         "times": [
             "dramatic midday, towering natural cumulus clouds, deep real blue sky",
