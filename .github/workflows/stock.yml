@@ -22,6 +22,11 @@ jobs:
       - name: Install dependencies
         run: pip install requests
 
+      - name: Clone scripts repo
+        run: |
+          git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/auto-stock-10k-scripts.git scripts_repo
+          echo "✅ Cloned scripts repo"
+
       - name: Clone all image repos
         run: |
           for i in $(seq 1 30); do
@@ -34,6 +39,7 @@ jobs:
           PIXAZO_KEY:  ${{ secrets.PIXAZO_KEY }}
           GH_TOKEN:    ${{ secrets.GH_TOKEN }}
           GH_USERNAME: a0-0-0a
+          SCRIPTS_REPO_PATH: ${{ github.workspace }}/scripts_repo
         run: |
           cd scripts
           python3 stock_pipeline.py
