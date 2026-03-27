@@ -25,14 +25,14 @@ ALL_TIMES = DAYTIME + GOLDEN
 GROUPS = {
     "glacial_lakes": {
         "locations": [
-            "Banff Lake Louise Canada, vivid turquoise glacial lake mountains",
-            "Plitvice lakes Croatia, cascading vivid turquoise terraced pools",
-            "Patagonia glacial lake Argentina, milky vivid turquoise water mountains",
-            "Moraine Lake Banff Canada, vivid turquoise water rocky valley peaks",
-            "Lake Baikal Russia, crystal clear deep vivid blue surface",
-            "New Zealand fiordland, mirror-still dark fjord water cliffs",
-            "Norway Nærøyfjord, deep mirror still water vertical cliffs",
-            "Austria Achensee alpine lake, clear turquoise water mountain backdrop",
+            "vivid turquoise glacial lake mountains",
+            "cascading vivid turquoise terraced pools",
+            "milky vivid turquoise water mountains",
+            "vivid turquoise water rocky valley peaks",
+            "crystal clear deep vivid blue surface",
+            "mirror-still dark fjord water cliffs",
+            "deep mirror still water vertical cliffs",
+            "clear turquoise water mountain backdrop",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_WATER,
@@ -64,13 +64,13 @@ GROUPS = {
         "locations": [
             # ✅ removed Iceland glacial river from autumn golden season
             # Iceland has no golden autumn trees — replaced with better locations
-            "Norway Geiranger fjord, dramatic cascading real waterfall cliffs",
-            "Plitvice waterfall Croatia, vivid turquoise cascading water",
-            "Columbia River Gorge USA, dramatic waterfall rocky cliff autumn",
-            "New Zealand Milford Sound, cascading real waterfall dark cliff",
-            "Iceland Skogafoss waterfall, massive real waterfall open plain",
-            "Norway Vøringsfossen, dramatic real waterfall deep canyon",
-            "Yosemite Valley USA, massive granite waterfall, forest below",
+            "dramatic cascading real waterfall cliffs",
+            "vivid turquoise cascading water",
+            "dramatic waterfall rocky cliff autumn",
+            "cascading real waterfall dark cliff",
+            "massive real waterfall open plain",
+            "dramatic real waterfall deep canyon",
+            "massive granite waterfall, forest below",
         ],
         "times": ALL_TIMES,
         "compositions": COMPOSITIONS_WATER,
