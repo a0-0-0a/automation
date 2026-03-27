@@ -55,7 +55,6 @@ WEIGHTED_GROUPS = {
     "saharan_dunes":       2,
     "dramatic_sea_cliffs": 2,
     "beach_seascape":      2,
-    "temperate_forest":    2,
     "wildflower_meadow":   2,
 }
 
