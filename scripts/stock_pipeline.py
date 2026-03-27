@@ -26,7 +26,7 @@ from engine.image_gen    import generate_image
 from engine.local_builder import generate_local_data, build_local_prompt
 from engine.seo_builder  import build_local_seo
 from engine.repo_manager import (
-    get_next_slot, get_total_generated, get_repo_count, push_repo
+    get_next_slot, get_total_generated, push_repo
 )
 
 # ════════════════════════════════════════════════════════════
