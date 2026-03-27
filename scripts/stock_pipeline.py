@@ -5,6 +5,8 @@ import time
 import glob
 import importlib
 import subprocess
+import functools
+print = functools.partial(print, flush=True)
 
 # ════════════════════════════════════════════════════════════
 # إعداد المسارات — نجلب الـ engine والـ groups من الـ scripts repo
