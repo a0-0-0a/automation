@@ -39,7 +39,7 @@ GH_TOKEN         = os.environ.get("GH_TOKEN", "")
 GH_USERNAME      = os.environ.get("GH_USERNAME", "a0-0-0a")
 
 IMAGES_PER_REPO  = 333
-TOTAL_REPOS      = 30
+TOTAL_REPOS      = 1
 PUSH_EVERY       = 10
 IMAGES_PER_RUN   = 500
 SLEEP_BETWEEN    = 5
