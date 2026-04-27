@@ -27,12 +27,10 @@ jobs:
           git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/auto-stock-10k-scripts.git scripts_repo
           echo "✅ Cloned scripts repo"
 
-      - name: Clone all image repos
+      - name: Clone image repo
         run: |
-          for i in $(seq 1 30); do
-            git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img-$i.git imgs/img$i
-            echo "✅ Cloned img-$i"
-          done
+          git clone https://x-access-token:${{ secrets.GH_TOKEN }}@github.com/a0-0-0a/img-1.git imgs/img1
+          echo "✅ Cloned img-1"
 
       - name: Run stock pipeline
         env:
@@ -44,24 +42,22 @@ jobs:
           cd scripts
           python3 stock_pipeline.py
 
-      - name: Push all image repos
+      - name: Push image repo
         run: |
-          for i in $(seq 1 30); do
-            cd imgs/img$i
-            git config user.email "action@github.com"
-            git config user.name "GitHub Action"
-            git add -A
-            COUNT=$(git status --porcelain | wc -l)
-            if [ "$COUNT" -gt "0" ]; then
-              git commit -m "add images"
-              git checkout -B main
-              git push -u origin main
-              echo "✅ Pushed img-$i"
-            else
-              echo "⏭ Nothing new in img-$i"
-            fi
-            cd ../..
-          done
+          cd imgs/img1
+          git config user.email "action@github.com"
+          git config user.name "GitHub Action"
+          git add -A
+          COUNT=$(git status --porcelain | wc -l)
+          if [ "$COUNT" -gt "0" ]; then
+            git commit -m "add images"
+            git checkout -B main
+            git push -u origin main
+            echo "✅ Pushed img-1"
+          else
+            echo "⏭ Nothing new in img-1"
+          fi
+          cd ../..
 
       - name: Keep repo active
         run: |
@@ -79,8 +75,8 @@ jobs:
           sys.path.insert(0, 'scripts_repo')
           sys.path.insert(0, 'scripts')
           from engine.repo_manager import get_total_generated
-          total = get_total_generated('imgs', 30)
-          capacity = 333 * 30
+          total = get_total_generated('imgs', 1)
+          capacity = 333 * 1
           print(capacity - total)
           " 2>/dev/null || echo "999")
           if [ "$REMAINING" -gt "0" ]; then
